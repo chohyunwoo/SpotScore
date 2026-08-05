@@ -1,0 +1,46 @@
+# dev profile: 로컬 Docker Compose로 띄운 PostgreSQL을 사용한다 (docker-compose.yml 참고)
+spring:
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${POSTGRES_DB:spotscore}
+    username: ${POSTGRES_USER:spotscore}
+    password: ${POSTGRES_PASSWORD:spotscore}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+# 확정 API 2종에 대한 연결 설정 - 인증키는 반드시 환경변수로 주입 (.env.example 참고)
+spotscore:
+  sgis:
+    base-url: https://sgisapi.kostat.go.kr/OpenAPI3
+    consumer-key: ${SGIS_CONSUMER_KEY:}
+    consumer-secret: ${SGIS_CONSUMER_SECRET:}
+    # 실제 호출로 확인: year는 필수 파라미터이고, 2025년 데이터는 아직 미발행이라
+    # 2024가 현재 조회 가능한 최신 연도였다 (호출 시점 기준 - 팀이 주기적으로 재확인할 것).
+    stat-year: ${SGIS_STAT_YEAR:2024}
+  store-zone:
+    base-url: https://apis.data.go.kr/B553077/api/open/sdsc2
+    service-key: ${STORE_ZONE_SERVICE_KEY:}
+  batch:
+    # 강남구 역삼1동/역삼2동 - 2026-08-04에 실제 SGIS/상권정보 라이브 호출로 검증된 값
+    # (RegionCodeMappingValidator가 매 배치 실행마다 다시 대조하므로 값이 바뀌면 자동으로
+    # WARN + 스킵된다). 다른 지역을 테스트하려면 SPOTSCORE_BATCH_TARGET_REGIONS 환경변수로
+    # override.
+    target-regions: ${SPOTSCORE_BATCH_TARGET_REGIONS:11230640:11680640,11230650:11680650}
+  cors:
+    # 프론트 개발 서버(Vite 기본 포트)
+    allowed-origins: ${SPOTSCORE_CORS_ALLOWED_ORIGINS:http://localhost:5173}
+  discovery:
+    # MVP 범위(서울) 루트 코드 - 전국 대응 시 이 값만 바꾸면 된다(CLAUDE.md 확장성 원칙).
+    root-adm-cd: ${SPOTSCORE_DISCOVERY_ROOT_ADM_CD:11}
+    signgu-sample-pages: ${SPOTSCORE_DISCOVERY_SIGNGU_SAMPLE_PAGES:20}
+
+logging:
+  level:
+    com.spotscore: DEBUG

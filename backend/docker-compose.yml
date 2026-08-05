@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: spotscore-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-spotscore}
+      POSTGRES_USER: ${POSTGRES_USER:-spotscore}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-spotscore}
+    ports:
+      - "5432:5432"
+    volumes:
+      - spotscore-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-spotscore} -d ${POSTGRES_DB:-spotscore}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  spotscore-postgres-data:

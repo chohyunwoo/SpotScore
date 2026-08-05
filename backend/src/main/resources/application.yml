@@ -1,0 +1,38 @@
+spring:
+  application:
+    name: spotscore-backend
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  jpa:
+    open-in-view: false
+
+server:
+  port: ${SERVER_PORT:8080}
+
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    disable-swagger-default-url: true
+
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+  level:
+    root: INFO
+    com.spotscore: DEBUG
+
+spotscore:
+  batch:
+    # 매월 1일 03:00 실행. 배치 대상 지역은 profile별 설정(application-dev.yml 등)에서
+    # 주입한다 - CLAUDE.md 확장성 원칙에 따라 여기에 지역을 하드코딩하지 않는다.
+    cron: "0 0 3 1 * *"
+    # 형식: "sgisAdmCd:adongCd" 쌍의 콤마 구분 목록 (TargetRegion 참고)
+    target-regions: ${SPOTSCORE_BATCH_TARGET_REGIONS:}
+  industry:
+    # 업종 선택 드롭다운 기본 노출(featured) 대상 - 실제 업소 수 집계(2026-08-05
+    # 기준 상위 30개) 결과. FeaturedIndustrySeedingService가 이 목록으로
+    # industry_category.featured를 갱신한다. 집계가 바뀌면 이 값만 바꾸면 된다
+    # (코드에 업종 코드를 나열하지 않는다 - CLAUDE.md 확장성 원칙 2).
+    featured-codes: ${SPOTSCORE_FEATURED_INDUSTRY_CODES:I201,S207,I210,G209,L102,M107,P106,I212,M105,G204,Q102,I211,M112,P105,G205,G215,M109,M103,R104,I101,R103,I203,M104,I204,M113,G208,G213,N102,P107,I202}

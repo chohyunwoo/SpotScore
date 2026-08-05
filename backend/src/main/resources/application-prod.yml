@@ -1,0 +1,34 @@
+# prod profile: Supabase PostgreSQL 연결 (표준 Spring Boot 실행 방식 - 특정 PaaS 종속 설정 없음)
+# 배포 환경(AWS EC2 등)에서 DB_URL/DB_USERNAME/DB_PASSWORD 및 아래 API 키를 환경변수로 주입할 것
+spring:
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+spotscore:
+  sgis:
+    base-url: https://sgisapi.kostat.go.kr/OpenAPI3
+    consumer-key: ${SGIS_CONSUMER_KEY}
+    consumer-secret: ${SGIS_CONSUMER_SECRET}
+    stat-year: ${SGIS_STAT_YEAR:}
+  store-zone:
+    base-url: https://apis.data.go.kr/B553077/api/open/sdsc2
+    service-key: ${STORE_ZONE_SERVICE_KEY}
+  cors:
+    # 배포된 프론트 도메인으로 반드시 명시 설정할 것 - 비우면 CORS 전체 비활성(WebConfig 참고)
+    allowed-origins: ${SPOTSCORE_CORS_ALLOWED_ORIGINS:}
+  discovery:
+    root-adm-cd: ${SPOTSCORE_DISCOVERY_ROOT_ADM_CD:}
+    signgu-sample-pages: ${SPOTSCORE_DISCOVERY_SIGNGU_SAMPLE_PAGES:20}
+
+logging:
+  level:
+    com.spotscore: INFO

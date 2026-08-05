@@ -1,0 +1,25 @@
+# IDE
+.idea/
+.vscode/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Backend (Gradle)
+backend/.gradle/
+backend/build/
+backend/out/
+backend/*.log
+
+# Frontend (Node/Vite)
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/*.local
+frontend/**/*.tsbuildinfo
+
+# OS
+.DS_Store
+Thumbs.db
