@@ -6,6 +6,7 @@ import com.spotscore.collector.dto.SgisPopulationDto;
 import com.spotscore.collector.dto.StoreItemDto;
 import com.spotscore.config.TargetRegion;
 import com.spotscore.exception.ExternalApiException;
+import com.spotscore.util.DongNameNormalizer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -82,7 +83,12 @@ public class RegionCodeMappingValidator {
             }
 
             String admNm = populationRows.get(0).admNm();
-            if (admNm != null && sample.adongName() != null && !admNm.contains(sample.adongName())) {
+            // 구분자 정규화(예: "종로1·2·3·4가동" vs "종로1.2.3.4가동") 없이 원문 그대로
+            // contains()만 하면 복합 동명이 표기 차이만으로 불일치 처리된다(REGION
+            // 크로스워크 재구축 진단에서 7건 확인) - DongNameNormalizer로 양쪽 다
+            // 정규화한 뒤 대조한다(DongNameMatcher와 동일 규칙 공유).
+            if (admNm != null && sample.adongName() != null
+                    && !DongNameNormalizer.normalizeLoose(admNm).contains(DongNameNormalizer.normalizeLoose(sample.adongName()))) {
                 log.warn("행정구역 코드 매핑 불일치 - sgisAdmCd: {}(adm_nm: {}) vs adongCd: {}(adongNm: {}) - 서로 다른 지역을 " +
                                 "가리키는 것으로 보임(TargetRegion 설정값 재확인 필요)",
                         target.sgisAdmCd(), admNm, target.adongCd(), sample.adongName());

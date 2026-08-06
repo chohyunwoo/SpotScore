@@ -1,5 +1,3 @@
-# CLAUDE.md
-
 이 파일은 Claude Code가 이 저장소에서 작업할 때 참고하는 프로젝트 컨텍스트입니다.
 
 ## 프로젝트 개요
@@ -13,24 +11,24 @@
 ## 확정 기술 스택
 
 | 영역 | 선택 | 비고 |
-|---|---|---|
+| --- | --- | --- |
 | 백엔드 | Spring Boot (Gradle) | Java 경험은 있으나 Python 경험 없음 → Python 스택 배제하고 Spring 선택 |
-| 프론트엔드 | React | |
+| 프론트엔드 | React |  |
 | DB | PostgreSQL | 관계형 구조(지역 × 업종 = 점수), 추후 PostGIS 확장 가능 |
 | 외부 API 호출 | WebClient | 비동기 병렬 호출(SGIS + 상권정보) |
 | 배치 스케줄링 | Spring `@Scheduled` | 월 1회 배치 |
-| DB 접근(ORM) | Spring Data JPA | |
-| 지도 시각화 | Kakao Map API | |
-| 차트(브레이크다운) | Recharts | |
-| 데이터 페칭 | TanStack Query | |
-| 상태관리 | React Context API | |
+| DB 접근(ORM) | Spring Data JPA |  |
+| 지도 시각화 | Kakao Map API |  |
+| 차트(브레이크다운) | Recharts |  |
+| 데이터 페칭 | TanStack Query |  |
+| 상태관리 | React Context API |  |
 | DB 실행 환경 | Docker Compose | 팀 전체 동일 DB 버전/설정 재현 |
 | 스키마 마이그레이션 | Flyway | 스키마 변경 이력 추적, 확장성 원칙 준수 검증 |
-| 환경 분리 | Spring Profile (dev/prod) | |
-| 백엔드 빌드 도구 | Gradle (Groovy DSL) | |
-| API 예외 처리 | `@ControllerAdvice` 전역 처리 | |
-| API 문서화 | Springdoc OpenAPI(Swagger UI) | |
-| 프론트 빌드 도구 | Vite | |
+| 환경 분리 | Spring Profile (dev/prod) |  |
+| 백엔드 빌드 도구 | Gradle (Groovy DSL) |  |
+| API 예외 처리 | `@ControllerAdvice` 전역 처리 |  |
+| API 문서화 | Springdoc OpenAPI(Swagger UI) |  |
+| 프론트 빌드 도구 | Vite |  |
 | 프론트 언어 | TypeScript | API 응답 필드 타입 안정성 확보 |
 | 스타일링 | styled-components | 점수 구간별 동적 색상 표현에 유리 |
 
@@ -39,6 +37,7 @@
 프로젝트 검토 과정에서 서울 실시간 도시데이터, 지자체별 유동인구 API 등은 지역 제한/신뢰도 문제로 **의도적으로 제외**했음. 코드에 새 공공데이터 API를 추가하기 전에 반드시 팀 논의를 거칠 것.
 
 ### 1. SGIS (통계지리정보서비스) — 통계청
+
 - Base URL: `https://sgisapi.kostat.go.kr/OpenAPI3`
 - 인증: `auth/authentication.json`에 consumer_key/secret → accessToken 발급 (만료 있음, 재발급 로직 필요)
 - 핵심 엔드포인트: `stats/population.json` (행정구역별 인구/가구 통계)
@@ -47,13 +46,14 @@
 - 역할: 잠재 고객 규모/가구 구조 산출, 지역 좌표 확보
 
 ### 2. 소상공인시장진흥공단 상가(상권)정보
+
 - Base URL: `https://apis.data.go.kr/B553077/api/open/sdsc2`
 - 인증: 공공데이터포털 발급 `serviceKey`
 - 핵심 오퍼레이션: `storeListInDong` (행정구역 단위 업소 조회, `divId="adongCd"`+`key`)
 - 역할: 동일 업종 경쟁 밀집도 산출
 - 주의: 1회 응답 최대 1,000건 — 대도시 조회 시 페이징 필수
 
-두 API는 행정표준코드(`adm_cd` ↔ `ctprvnCd/signguCd/adongCd`)로 연결. 자릿수/포맷은 아직 표본 검증 전 — 코드에서 가정하지 말고 실제 데이터로 검증할 것.
+두 API는 행정표준코드(`adm_cd` ↔ `ctprvnCd/signguCd/adongCd`)로 연결. ⚠️ **근본 원인 확정(서울 전체 353개 실행 + 진단 완료)**: 상권정보의 `adongCd`는 SGIS의 `adm_cd`와 **완전히 독립적으로 관리되는 별개의 코드 체계**임(분동/코드 재편 이력이 서로 다름). "구 코드만 바꾸고 동 접미사는 SGIS 값을 복사"하는 변환은 원천적으로 성립하지 않으며, 지금까지 정상 동작한 140개는 접미사가 우연히 일치한 지역일 뿐. 실제 두 시스템 모두 데이터는 완전한데 코드 번호 체계만 다름(예: 가락1동 = SGIS `11240660` vs 상권정보 `11710631`). **추가로 REGION 테이블 자체에 이름 불일치로 시딩 단계에서 걸러진 동이 다수 있음**(송파구 기준 27개 중 13개 누락 확인) — "서울 전체 353개"라는 숫자 자체도 과소집계 상태. 해결은 25개 구 전체를 `divId=signguCd`로 페이징 조회해 실제 `(adongCd, adongNm)`을 뽑고 SGIS 동명과 문자열 매칭해 REGION을 교체하는 방법만 유효(행정안전부 등 제3의 표준코드 사용, 자동 변환 규칙 추정은 모두 기각됨). 부수 발견: `SeoulRegionDiscoveryService.checkMappingLightweight`가 NODATA_ERROR를 "매핑 성립"으로 잘못 간주해 틀린 코드를 걸러내지 못하는 버그 — 해결책과 무관하게 같이 수정 필요.
 
 ## 데이터 흐름 (5계층)
 
@@ -82,6 +82,9 @@
 
 ## DB 스키마 (핵심 엔티티, 3주차 실제 마이그레이션 반영)
 
+> ⚠️ 새 마이그레이션을 추가하기 전에 반드시 `DB_스키마_변경_관리_가이드.md`의 원칙(적용된 마이그레이션 수정 금지, nullable 우선, 체크리스트)을 먼저 확인할 것.
+> 
+
 ```
 REGION(regionCode PK, regionName, level, latitude, longitude)  ← latitude/longitude는 V6 추가 예정(아직 미구현)
 INDUSTRY_CATEGORY(industryCode PK, industryName, level)
@@ -96,6 +99,7 @@ SCORE_CACHE(regionCode FK, industryCode FK, totalScore, populationScore, househo
 탐색 흐름: **업종 선택(필수) → 랭킹 리스트 + 지도(양방향 연동) → 상세 패널**
 
 상세 패널은 항상 다음을 함께 표시:
+
 - 종합 점수 (크게)
 - 브레이크다운 ①인구 규모 ②가구 구조 ③경쟁 밀집도 (각 항목의 원자료 값도 함께 노출 — "왜 이 점수인가"를 사용자가 확인할 수 있어야 함)
 
@@ -119,7 +123,7 @@ SCORE_CACHE(regionCode FK, industryCode FK, totalScore, populationScore, househo
 ### 확정 가중치 수치
 
 | 비교 | Saaty 값 | 근거 |
-|---|---|---|
+| --- | --- | --- |
 | 수요 vs 공급 | 2 (수요 우위) | 수요가 창업 성패의 기초 지표지만, 인구 많은 곳은 경쟁도 몰리는 경향이 있어 공급에도 1/3 비중 유지 |
 | 인구 규모 vs 가구 구조 | 3 (인구규모 우위) | 인구 규모는 시장 절대 크기(1차 지표), 가구 구조는 세부 보정(2차 지표) |
 
@@ -132,35 +136,58 @@ SCORE_CACHE(regionCode FK, industryCode FK, totalScore, populationScore, househo
 **중요**: 이전엔 프론트가 nested 구조(`{ region: {...}, ... }`)로 가정하고 있었으나, 실제 구현·검증 결과 **모두 flat 구조**로 확정됨. 앞으로 이 계약을 그대로 유지할 것 — 임의로 nested 구조로 바꾸지 말 것.
 
 - `GET /api/v1/industries` → `[{ industryCode, industryName }]` (level 필드 없음)
-- `GET /api/v1/scores/ranking?industryCode=` → `[{ regionCode, regionName, totalScore, populationScore, householdScore, densityScore, latitude, longitude }]` (flat, `householdScore`는 NOT NULL, `latitude`/`longitude`는 V6 시딩 완료 지역만 값 있음). 데이터 없으면 빈 배열을 200으로 반환(에러 아님).
+- `GET /api/v1/scores/ranking?industryCode=` → `[{ regionCode, regionName, totalScore, populationScore, householdScore, densityScore, latitude, longitude, percentileRank, attractivenessTier }]` (flat, `householdScore`는 NOT NULL, `latitude`/`longitude`는 V6 시딩 완료 지역만 값 있음). 데이터 없으면 빈 배열을 200으로 반환(에러 아님).
 - `GET /api/v1/scores/detail?regionCode=&industryCode=` → `{ regionName, industryName, totalScore, populationStat: {...}, competitionStat: {...} }` (regionName/industryName은 최상위 flat). **`populationStat`/`competitionStat`은 객체 전체가 null일 수 있음** — 프론트는 반드시 옵셔널 체이닝으로 처리. `populationStat.householdCount`/`avgHouseholdSize`는 여전히 nullable(V2가 NOT NULL 승격 안 함).
+
+## 점수 해석 기준 (확정) — 퍼센타일 밴드
+
+종합 점수(min-max 정규화)는 데이터셋 크기가 바뀔 때마다 절대 숫자가 흔들림(실제로 매핑 이슈 해결 전/후 역삼1동 45.69→73.65로 변동 — 동네가 좋아진 게 아니라 비교 모집단이 커진 것). **고정된 절대 점수 기준("80점 이상") 대신 같은 업종 내 상대 순위(퍼센타일) 기반 등급을 사용한다.**
+
+| 퍼센타일 구간(같은 업종 내) | 등급 라벨 |
+| --- | --- |
+| 상위 10% 이내 | 매력적인 입지(`ATTRACTIVE`) |
+| 상위 10~30% | 괜찮은 입지(`GOOD`) |
+| 상위 30~70% | 평균적인 입지(`AVERAGE`) |
+| 하위 30% | 신중한 검토 필요(`CAUTION`) |
+
+**구간 경계(10%/30%/70%) 선정 근거**: 매출 데이터 등 통계적으로 도출한 값이 아니라 UX 관점의 합리적 기본값. 매출 데이터 확보 시(위 "보류된 대안") 실증적으로 재조정 가능 — 지금은 고정값으로 사용.
+
+**구현 시 지킬 것**: `industryCode`로 파티션한 `PERCENT_RANK()` SQL 윈도우 함수로 조회 시점 계산(별도 저장 불필요, 내부 DB 쿼리라 외부 API 호출 금지 원칙과 무관). 브레이크다운(인구/가구/경쟁)은 그대로 유지 — 퍼센타일은 "요약", 브레이크다운은 "근거".
+
+**보류된 대안**: 매출 데이터로 절대 기준선을 실증 도출하는 방법도 검토했으나, 전국 커버리지 매출 데이터(소상공인365)가 iframe 전용이라 원천 데이터 접근 불가 확인(2026-08). 향후 확장 아이디어로 보류.
+
+## 업종 드롭다운 노출 기준 (확정) — 추천 30개
+
+중분류 75개 전체를 드롭다운에 노출하면 고르기 어려워 추림. **기준: 실제 DB 업소 수(store_count) 상위 30개**(수동 큐레이션·대분류 단일화는 근거 부족/구분력 상실로 기각). 10개 대분류 전부가 상위 40개 안에 최소 1개씩 포함되어 균형 확인됨(단 I2 음식이 27.1%로 최대 비중 — 참고 사항). N=30은 대분류 균형과 드롭다운 길이의 절충점.
+
+**구현 시 지킬 것**: `INDUSTRY_CATEGORY`에 `featured`(boolean) 컬럼으로 관리(업종 코드를 애플리케이션 코드에 나열하지 말 것 — 확장성 원칙 2번). `GET /api/v1/industries`는 기본 `featured=true`만 반환, `?all=true`로 전체 조회. 상세 기준·집계표는 API 명세서 5.2.4절 참고.
 
 ## 로깅 가이드
 
 계층별로 아래 지점에서 로그를 남길 것. 레벨 기준: **ERROR**=즉시 대응 필요(인증 실패, DB 커넥션 실패), **WARN**=예상된 예외 케이스(N/A 값, 코드 매핑 실패 등 "아직 결정되지 않은 사항"과 연결된 케이스), **INFO**=정상 흐름 이정표, **DEBUG**=개발 중에만 활성화하는 상세 추적.
 
 | 계층 | 로그 위치 | 레벨 | 내용 |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | 외부 API 호출 | AccessToken 발급 | INFO/ERROR | 발급 성공 시각 / 실패 응답 코드 |
-| | API 요청 시작 | DEBUG | 요청 URL, 파라미터(`adm_cd`, `divId` 등) |
-| | API 응답 수신 | INFO | HTTP 상태코드, 응답 건수 |
-| | API 응답 실패 | ERROR | `errCd`/`errMsg`(SGIS), `resultCode`(상권정보) 원문 |
-| | 페이징 처리 중 | DEBUG | 현재 페이지 번호, 누적 수집 건수 |
+|  | API 요청 시작 | DEBUG | 요청 URL, 파라미터(`adm_cd`, `divId` 등) |
+|  | API 응답 수신 | INFO | HTTP 상태코드, 응답 건수 |
+|  | API 응답 실패 | ERROR | `errCd`/`errMsg`(SGIS), `resultCode`(상권정보) 원문 |
+|  | 페이징 처리 중 | DEBUG | 현재 페이지 번호, 누적 수집 건수 |
 | 배치 스케줄러 | 배치 시작/종료 | INFO | 시작/종료 시각, 총 소요시간 |
-| | 수집 결과 요약 | INFO | 수집 건수 vs DB 저장 건수 |
-| | 배치 실패 | ERROR | 예외 스택트레이스, 실패 시점 |
+|  | 수집 결과 요약 | INFO | 수집 건수 vs DB 저장 건수 |
+|  | 배치 실패 | ERROR | 예외 스택트레이스, 실패 시점 |
 | 정규화/점수 계산 | 행정구역 코드 매핑 | WARN | 매핑 실패한 `adm_cd`/`adongCd` 값 |
-| | N/A(비공개) 값 처리 | WARN | 어떤 지역·필드가 N/A였는지 |
-| | 가중치 계산 결과 | DEBUG | 지역×업종 조합, 브레이크다운별 점수, 종합 점수 |
-| | 정규화 이상치 | WARN | min-max/z-score 계산 중 분모 0 등 예외 |
+|  | N/A(비공개) 값 처리 | WARN | 어떤 지역·필드가 N/A였는지 |
+|  | 가중치 계산 결과 | DEBUG | 지역×업종 조합, 브레이크다운별 점수, 종합 점수 |
+|  | 정규화 이상치 | WARN | min-max/z-score 계산 중 분모 0 등 예외 |
 | DB 접근 | 쿼리/커넥션 실패 | ERROR | 실패한 쿼리, 커넥션 풀 상태 |
-| | 트랜잭션 롤백 | WARN | 롤백 사유 |
+|  | 트랜잭션 롤백 | WARN | 롤백 사유 |
 | API(Controller) | 요청 수신 | INFO | 엔드포인트, 요청 파라미터 |
-| | 응답 처리 시간 | DEBUG | 처리 소요시간(ms) |
-| | `@ControllerAdvice` 예외 처리 | ERROR | 예외 종류, 발생 위치(서비스 메서드) |
+|  | 응답 처리 시간 | DEBUG | 처리 소요시간(ms) |
+|  | `@ControllerAdvice` 예외 처리 | ERROR | 예외 종류, 발생 위치(서비스 메서드) |
 | 프론트(React) | TanStack Query `onError` | error | 실패한 API 엔드포인트, 응답 코드 |
-| | Kakao Map 렌더링 실패 | warn | 지도 초기화 실패 사유 |
-| | 상세 패널 데이터 누락 | warn | 브레이크다운 필드 중 누락된 값 |
+|  | Kakao Map 렌더링 실패 | warn | 지도 초기화 실패 사유 |
+|  | 상세 패널 데이터 누락 | warn | 브레이크다운 필드 중 누락된 값 |
 
 ## 폴더 구조
 
@@ -184,17 +211,19 @@ project/
 
 ## 아직 결정되지 않은 사항 (임의로 확정하지 말 것)
 
-- 행정동 코드(SGIS `adm_cd` 7자리) ↔ 상권정보 `adongCd` 자릿수/포맷 표본 대조 필요
+- ~~상권정보 `adongCd`가 SGIS `adm_cd`와 독립된 코드 체계~~ — **해결 완료**: 25개 구 전체 signguCd 크로스워크 재구축으로 REGION 353→426개(73개 신규), 매핑 성공률 40%→98%(417/426). 기존 140개 회귀 없음.
+- **[후속] `RegionCodeMappingValidator` 이름 대조 구분자 정규화 누락**: "종로1·2·3·4가동" 등 복합 동명 7건이 "·" vs "." 표기 차이로 실제 배치 시 여전히 불일치 처리됨. 크로스워크 재구축 시 만든 `DongNameMatcher`의 완화 대조 로직을 이 검증기에도 적용 필요.
+- **[후속] 동대문구 용신동(`sgisAdmCd: 11060810`) 매핑 실패** — 크로스워크 스캔에서 대응 이름을 찾지 못함, 원인 조사 필요.
 - 상권정보 1,000건 초과 시 페이징 처리 로직
 - SGIS 통계값 5 이하 비공개(N/A) 케이스 처리 방식(0 처리 vs 제외)
 - 상권업종분류 vs 표준산업분류 불일치 시 업종 통일 기준
 - ~~종합 점수 가중치~~ — **확정 완료** (인구규모 0.50 / 가구구조 0.17 / 경쟁밀집도 0.33). `SCORE_WEIGHT_CONFIG` 시딩 아직 안 됐으면 진행 필요.
-- **`populationStat.householdCount`/`avgHouseholdSize`가 null일 때 브레이크다운 화면 표시 방식** — 0 처리 vs "데이터 없음" 표시 중 미정 (3주차 curl 검증으로 nullable 확인됨)
+- ~~`populationStat.householdCount`/`avgHouseholdSize` nullable 여부~~ — **해소됨**: 서울 전체(426개) 재검증 결과 null 비율 0%
 
 ## 1개월 마일스톤
 
 | 주차 | 목표 |
-|---|---|
+| --- | --- |
 | 1주차 | Spring Initializr 셋업, API 인증키 발급, SGIS/상권정보 클라이언트 구현 |
 | 2주차 | 배치로 원자료 DB 적재, 행정구역 코드 매핑 검증, 정규화·가중치 로직 구현 |
 | 3주차 | REST 컨트롤러 구현, 프론트 기본 골격(랭킹+지도) 연동 |
