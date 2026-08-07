@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import styled, { useTheme } from 'styled-components';
 import { useRanking } from '../../api/scores';
+import { useStores } from '../../api/stores';
 import { useSelection } from '../../context/SelectionContext';
 import { IndustrySelector } from '../IndustrySelector/IndustrySelector';
 import { RegionIndustryDetailPanel } from '../RegionIndustryDetailPanel/RegionIndustryDetailPanel';
@@ -182,6 +183,20 @@ const EmptyOverlay = styled.div`
   pointer-events: none;
 `;
 
+/** 개별 업소 좌표 출처 표기 - 소상공인시장진흥공단 상가업소 API(CLAUDE.md 확정 API 2). */
+const AttributionBadge = styled.div`
+  position: absolute;
+  bottom: ${({ theme }) => theme.spacing.sm};
+  right: ${({ theme }) => theme.spacing.sm};
+  z-index: 5;
+  padding: 2px ${({ theme }) => theme.spacing.sm};
+  border-radius: ${({ theme }) => theme.radius.sm};
+  background: rgba(255, 255, 255, 0.85);
+  color: ${({ theme }) => theme.colors.textTertiary};
+  font-size: ${({ theme }) => theme.typography.caption.size};
+  pointer-events: none;
+`;
+
 const FallbackMessage = styled.div`
   flex: 1;
   display: flex;
@@ -237,15 +252,81 @@ function buildScoreBadgeElement(
   return el;
 }
 
+/**
+ * 개별 업소 마커 아이콘 - 지역 배지(색상 스케일 원+숫자, CustomOverlay)와 확실히
+ * 구분되는 작은 무채색 점. CustomOverlay(지역 배지 방식)를 지역당 최대 수천 개인
+ * 업소에도 그대로 쓰면 실측 4초 넘게 걸리는 렌더링 지연이 있어(성능 확인 결과),
+ * 가벼운 네이티브 Marker + MarkerClusterer 조합으로 바꿨다 - MarkerImage는
+ * DOM 엘리먼트가 아니라 이미지 한 장이라 개수가 늘어도 비용이 훨씬 작다.
+ */
+function buildStoreMarkerImage(theme: AppTheme): kakao.maps.MarkerImage {
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10">` +
+    `<circle cx="5" cy="5" r="4" fill="${theme.colors.textPrimary}" stroke="${theme.colors.surface}" stroke-width="1.5"/>` +
+    `</svg>`;
+  const src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  return new window.kakao.maps.MarkerImage(src, new window.kakao.maps.Size(10, 10), {
+    offset: new window.kakao.maps.Point(5, 5),
+  });
+}
+
+function hexToRgba(hex: string, alpha: number): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+/**
+ * MarkerClusterer 기본 스타일은 카카오 기본값(노랑/초록 신호등식)이라 "강조색은
+ * accent 하나만" 원칙에 맞지 않아 오버라이드 - 개수 구간(기본 10/100 경계)에 따라
+ * accent를 크기/불투명도만 다르게 써서 하나의 색 스케일로만 표현한다.
+ */
+function buildClustererStyles(theme: AppTheme): Partial<CSSStyleDeclaration>[] {
+  const base: Partial<CSSStyleDeclaration> = {
+    color: theme.colors.onAccent,
+    textAlign: 'center',
+    fontFamily: theme.typography.fontFamily,
+    fontWeight: String(theme.typography.weight.bold),
+  };
+  return [
+    { ...base, width: '32px', height: '32px', lineHeight: '32px', fontSize: '12px', borderRadius: '16px', background: hexToRgba(theme.colors.accent, 0.7) },
+    { ...base, width: '40px', height: '40px', lineHeight: '40px', fontSize: '13px', borderRadius: '20px', background: hexToRgba(theme.colors.accent, 0.85) },
+    { ...base, width: '48px', height: '48px', lineHeight: '48px', fontSize: '14px', borderRadius: '24px', background: hexToRgba(theme.colors.accent, 1) },
+  ];
+}
+
+/** InfoWindow는 마커마다 만들지 않고 하나를 재사용 - content만 매번 바꿔 연다. */
+function buildStoreInfoContent(bizesNm: string, theme: AppTheme): HTMLDivElement {
+  const el = document.createElement('div');
+  el.textContent = bizesNm;
+  el.style.padding = '3px 8px';
+  el.style.fontFamily = theme.typography.fontFamily;
+  el.style.fontSize = '11px';
+  el.style.fontWeight = String(theme.typography.weight.medium);
+  el.style.background = theme.colors.textPrimary;
+  el.style.color = theme.colors.onAccent;
+  el.style.borderRadius = theme.radius.sm;
+  el.style.whiteSpace = 'nowrap';
+  return el;
+}
+
 export function MapDashboard() {
   const { industryCode, regionCode, setRegionCode } = useSelection();
   const { data: ranking, isLoading, isError } = useRanking(industryCode);
+  // 상세 패널이 열려있을 때만(regionCode && industryCode 둘 다 있을 때만) enabled -
+  // 전체 랭킹 지도에서는 호출되지 않는다(StoreController 문서에 명시된 사용 조건).
+  const { data: stores } = useStores(regionCode, industryCode);
   const kakaoStatus = useKakaoLoader();
   const theme = useTheme();
 
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<kakao.maps.Map | null>(null);
   const overlaysRef = useRef<Map<string, kakao.maps.CustomOverlay>>(new Map());
+  const storeMarkersRef = useRef<kakao.maps.Marker[]>([]);
+  const storeClustererRef = useRef<kakao.maps.MarkerClusterer | null>(null);
+  const storeInfoWindowRef = useRef<kakao.maps.InfoWindow | null>(null);
+  const pinnedStoreIdRef = useRef<string | null>(null);
   const boundsFittedForIndustryRef = useRef<string | null>(null);
 
   // 지도 인스턴스 초기화 (SDK 준비된 이후 1회)
@@ -294,6 +375,82 @@ export function MapDashboard() {
       overlaysRef.current.set(item.regionCode, overlay);
     });
   }, [ranking, kakaoStatus, regionCode, setRegionCode, theme]);
+
+  // 상세 패널이 열려있을 때만(regionCode 선택 시) 그 지역·업종의 개별 업소 점을
+  // 추가로 그린다 - 패널을 닫으면(regionCode === null) stores 쿼리 자체가
+  // disabled로 꺼지고 아래에서 기존 마커를 전부 지워 지역 배지만 남긴다.
+  // MarkerClusterer 사용(성능 확인 결과 - 아래 설명): 개별 setMap 대신
+  // clusterer.clear()/addMarkers()로 일괄 관리한다.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (kakaoStatus !== 'ready' || !map) {
+      return;
+    }
+
+    storeClustererRef.current?.clear();
+    storeMarkersRef.current = [];
+    storeInfoWindowRef.current?.close();
+    pinnedStoreIdRef.current = null;
+
+    if (!regionCode || !industryCode) {
+      return;
+    }
+
+    if (!storeInfoWindowRef.current) {
+      storeInfoWindowRef.current = new window.kakao.maps.InfoWindow({ removable: false });
+    }
+    const infoWindow = storeInfoWindowRef.current;
+    const markerImage = buildStoreMarkerImage(theme);
+
+    const markers: kakao.maps.Marker[] = [];
+    (stores ?? []).forEach((store) => {
+      if (store.lat === null || store.lon === null) {
+        console.warn('[MapDashboard] 좌표 없는 개별 업소라 마커를 표시하지 못함', store.bizesId);
+        return;
+      }
+
+      const marker = new window.kakao.maps.Marker({
+        position: new window.kakao.maps.LatLng(store.lat, store.lon),
+        image: markerImage,
+        title: store.bizesNm,
+      });
+
+      window.kakao.maps.event.addListener(marker, 'mouseover', () => {
+        infoWindow.setContent(buildStoreInfoContent(store.bizesNm, theme));
+        infoWindow.open(map, marker);
+      });
+      window.kakao.maps.event.addListener(marker, 'mouseout', () => {
+        if (pinnedStoreIdRef.current !== store.bizesId) {
+          infoWindow.close();
+        }
+      });
+      window.kakao.maps.event.addListener(marker, 'click', () => {
+        if (pinnedStoreIdRef.current === store.bizesId) {
+          pinnedStoreIdRef.current = null;
+          infoWindow.close();
+          return;
+        }
+        pinnedStoreIdRef.current = store.bizesId;
+        infoWindow.setContent(buildStoreInfoContent(store.bizesNm, theme));
+        infoWindow.open(map, marker);
+      });
+
+      markers.push(marker);
+    });
+
+    // MarkerClusterer가 map에 표시/클러스터링을 대신 맡으므로 개별 marker.setMap
+    // 호출은 하지 않는다(둘 다 하면 클러스터 밖에 중복으로 찍힘).
+    if (!storeClustererRef.current) {
+      storeClustererRef.current = new window.kakao.maps.MarkerClusterer({
+        map,
+        averageCenter: true,
+        minLevel: 3,
+        styles: buildClustererStyles(theme),
+      });
+    }
+    storeClustererRef.current.addMarkers(markers);
+    storeMarkersRef.current = markers;
+  }, [stores, regionCode, industryCode, kakaoStatus, theme]);
 
   // 업종을 고르면(=랭킹이 처음 도착하면) 기본 줌(전국)이 아니라 그 업종의 실제
   // 지역 분포에 맞춰 지도를 자동으로 프레이밍한다 - REGION에 폴리곤이 없어 경계를
@@ -408,6 +565,7 @@ export function MapDashboard() {
             {industryCode && !isLoading && !isError && rankingList.length === 0 && (
               <EmptyOverlay>아직 집계된 데이터가 없습니다. 배치 작업 완료 후 다시 확인해주세요.</EmptyOverlay>
             )}
+            <AttributionBadge>출처: 소상공인시장진흥공단</AttributionBadge>
           </>
         )}
 

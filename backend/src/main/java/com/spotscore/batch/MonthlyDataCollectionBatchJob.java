@@ -9,11 +9,13 @@ import com.spotscore.config.TargetRegion;
 import com.spotscore.domain.IndustryCategory;
 import com.spotscore.domain.PopulationStat;
 import com.spotscore.domain.Region;
+import com.spotscore.domain.Store;
 import com.spotscore.domain.StoreCount;
 import com.spotscore.repository.IndustryCategoryRepository;
 import com.spotscore.repository.PopulationStatRepository;
 import com.spotscore.repository.RegionRepository;
 import com.spotscore.repository.StoreCountRepository;
+import com.spotscore.repository.StoreRepository;
 import com.spotscore.scoring.ScoreCalculationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,6 +50,7 @@ public class MonthlyDataCollectionBatchJob {
     private final IndustryCategoryRepository industryCategoryRepository;
     private final PopulationStatRepository populationStatRepository;
     private final StoreCountRepository storeCountRepository;
+    private final StoreRepository storeRepository;
     private final ScoreCalculationService scoreCalculationService;
 
     public MonthlyDataCollectionBatchJob(BatchProperties batchProperties,
@@ -56,6 +59,7 @@ public class MonthlyDataCollectionBatchJob {
                                           IndustryCategoryRepository industryCategoryRepository,
                                           PopulationStatRepository populationStatRepository,
                                           StoreCountRepository storeCountRepository,
+                                          StoreRepository storeRepository,
                                           ScoreCalculationService scoreCalculationService) {
         this.batchProperties = batchProperties;
         this.mappingValidator = mappingValidator;
@@ -63,6 +67,7 @@ public class MonthlyDataCollectionBatchJob {
         this.industryCategoryRepository = industryCategoryRepository;
         this.populationStatRepository = populationStatRepository;
         this.storeCountRepository = storeCountRepository;
+        this.storeRepository = storeRepository;
         this.scoreCalculationService = scoreCalculationService;
     }
 
@@ -149,6 +154,7 @@ public class MonthlyDataCollectionBatchJob {
 
         savePopulationStat(region, populationDto, snapshotDate.getYear());
         int storeCountRowsSaved = saveStoreCounts(region, mapping.storeItems(), snapshotDate);
+        saveStoreItems(region, mapping.storeItems(), snapshotDate);
 
         return new RegionCollectionOutcome(1, storeCountRowsSaved);
     }
@@ -210,5 +216,54 @@ public class MonthlyDataCollectionBatchJob {
             saved++;
         }
         return saved;
+    }
+
+    // STORE_COUNT(집계)와 별개로 지도 개별 마커용 원본 업소 행을 저장한다. 이미
+    // saveStoreCounts가 받은 것과 같은 응답(mapping.storeItems())을 재활용할 뿐,
+    // 상권정보 API를 추가로 호출하지 않는다. STORE_COUNT/점수 계산 로직은 이
+    // 메서드와 무관하게 그대로 둔다.
+    private void saveStoreItems(Region region, List<StoreItemDto> storeItems, LocalDate snapshotDate) {
+        int saved = 0;
+        int skippedMissingId = 0;
+        int missingCoordinates = 0;
+
+        for (StoreItemDto item : storeItems) {
+            if (item.storeId() == null || item.storeId().isBlank()) {
+                log.warn("업소 원본 저장 스킵 - regionCode: {}, bizesNm: {} - bizesId 없음",
+                        region.getRegionCode(), item.storeName());
+                skippedMissingId++;
+                continue;
+            }
+            if (item.industryMediumCode() == null || item.industryMediumCode().isBlank()) {
+                log.warn("업소 원본 저장 스킵 - bizesId: {} - indsMclsCd 없음", item.storeId());
+                skippedMissingId++;
+                continue;
+            }
+
+            String industryName = item.industryMediumName() != null && !item.industryMediumName().isBlank()
+                    ? item.industryMediumName()
+                    : item.industryMediumCode();
+            IndustryCategory industry = industryCategoryRepository.findById(item.industryMediumCode())
+                    .orElseGet(() -> industryCategoryRepository.save(
+                            new IndustryCategory(item.industryMediumCode(), industryName, "MEDIUM")));
+
+            if (item.lon() == null || item.lat() == null) {
+                log.warn("업소 원본 좌표 누락 - bizesId: {}, regionCode: {} (지도 마커 표시 불가, 나머지 정보는 저장)",
+                        item.storeId(), region.getRegionCode());
+                missingCoordinates++;
+            }
+
+            storeRepository.findById(item.storeId())
+                    .ifPresentOrElse(
+                            existing -> existing.update(item.storeName(), industry, industryName, region,
+                                    item.lon(), item.lat(), snapshotDate),
+                            () -> storeRepository.save(new Store(item.storeId(), item.storeName(), industry,
+                                    industryName, region, item.lon(), item.lat(), snapshotDate))
+                    );
+            saved++;
+        }
+
+        log.info("업소 원본 저장 완료 - regionCode: {}, 저장 {}건, 스킵(식별자 누락) {}건, 좌표 누락 {}건",
+                region.getRegionCode(), saved, skippedMissingId, missingCoordinates);
     }
 }

@@ -132,3 +132,16 @@ export interface ScoreWeightConfig {
   weightKey: string;
   weightValue: number;
 }
+
+/**
+ * GET /api/v1/stores?regionCode=&industryCode= 응답 아이템 (StoreItemResponse.java 확인).
+ * 상세 패널을 열었을 때만 호출하는 용도 - 전체 랭킹 지도(서울 전체 뷰)에서는
+ * 호출하지 않는다(수백 개 개별 점을 다 찍으면 성능/가독성 문제 - 2일차 기록).
+ * lon/lat은 DB 컬럼이 nullable이라(극소수 좌표 누락 케이스 대비) optional 유지.
+ */
+export interface StoreItem {
+  bizesId: string;
+  bizesNm: string;
+  lon: number | null;
+  lat: number | null;
+}

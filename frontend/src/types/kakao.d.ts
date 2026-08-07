@@ -39,10 +39,28 @@ declare global {
       extend(latlng: LatLng): void;
     }
 
+    class Size {
+      constructor(width: number, height: number);
+    }
+
+    class Point {
+      constructor(x: number, y: number);
+    }
+
+    interface MarkerImageOptions {
+      offset?: Point;
+    }
+
+    /** 개별 업소 점(작은 원) 아이콘용 - 지역 배지(CustomOverlay)와 구분되는 스타일. */
+    class MarkerImage {
+      constructor(src: string, size: Size, options?: MarkerImageOptions);
+    }
+
     interface MarkerOptions {
       position: LatLng;
       map?: Map;
       title?: string;
+      image?: MarkerImage;
     }
 
     class Marker {
@@ -50,6 +68,42 @@ declare global {
       setMap(map: Map | null): void;
       setPosition(latlng: LatLng): void;
       getPosition(): LatLng;
+    }
+
+    interface InfoWindowOptions {
+      content?: string | HTMLElement;
+      removable?: boolean;
+      zIndex?: number;
+    }
+
+    /** 개별 업소 마커 호버/클릭 시 이름을 보여주는 용도 - 마커마다 만들지 않고 하나를 재사용한다. */
+    class InfoWindow {
+      constructor(options?: InfoWindowOptions);
+      open(map: Map, marker?: Marker): void;
+      close(): void;
+      setContent(content: string | HTMLElement): void;
+    }
+
+    interface MarkerClustererOptions {
+      map: Map;
+      markers?: Marker[];
+      averageCenter?: boolean;
+      minLevel?: number;
+      disableClickZoom?: boolean;
+      /** 클러스터 개수 구간별 스타일(기본값은 카카오 기본 노랑/초록이라 디자인 톤과 안 맞아 오버라이드). */
+      styles?: Partial<CSSStyleDeclaration>[];
+    }
+
+    /**
+     * libraries=clusterer로 별도 로드되는 서브라이브러리 - 개별 업소가 지역당
+     * 최대 수천 개라 CustomOverlay로 하나씩 그리면 렌더링이 눈에 띄게 느려짐
+     * (실측 4초+) 확인 후 도입. addMarkers에 넘긴 마커들의 map 표시/제거를
+     * 클러스터러가 대신 관리한다 - 개별 setMap 호출 불필요.
+     */
+    class MarkerClusterer {
+      constructor(options: MarkerClustererOptions);
+      addMarkers(markers: Marker[]): void;
+      clear(): void;
     }
 
     namespace event {

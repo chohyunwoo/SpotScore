@@ -34,7 +34,10 @@ export function useKakaoLoader(): KakaoLoaderStatus {
     const script = document.createElement('script');
     script.id = KAKAO_SDK_SCRIPT_ID;
     script.async = true;
-    script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${appKey}&autoload=false`;
+    // libraries=clusterer - 개별 업소 마커(지역당 최대 수천 개)를 CustomOverlay로
+    // 하나씩 그리면 실측 4초 넘게 걸리는 렌더링 지연이 있어(성능 확인 결과)
+    // MarkerClusterer로 전환 - 이 서브라이브러리가 별도 로드돼야 한다.
+    script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${appKey}&autoload=false&libraries=clusterer`;
     script.onload = () => window.kakao.maps.load(() => setStatus('ready'));
     script.onerror = () => {
       console.warn('[MapDashboard] Kakao Map 렌더링 실패: SDK 스크립트 로드 실패');
