@@ -1,43 +1,33 @@
 import styled from 'styled-components';
-import { DetailPanel } from './components/DetailPanel/DetailPanel';
-import { IndustrySelector } from './components/IndustrySelector/IndustrySelector';
-import { MapView } from './components/MapView/MapView';
-import { RankingList } from './components/RankingList/RankingList';
+import { MapDashboard } from './components/MapDashboard/MapDashboard';
 
 const Page = styled.div`
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 24px;
+  height: 100vh;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  padding: ${({ theme }) => theme.spacing.lg};
+  gap: ${({ theme }) => theme.spacing.md};
 `;
 
 const AppTitle = styled.h1`
-  font-size: 22px;
   margin: 0;
+  font-size: ${({ theme }) => theme.typography.h2.size};
+  font-weight: ${({ theme }) => theme.typography.h2.weight};
+  color: ${({ theme }) => theme.colors.textPrimary};
 `;
 
-const MainGrid = styled.div`
-  display: grid;
-  grid-template-columns: minmax(280px, 380px) 1fr;
-  gap: 16px;
-
-  @media (max-width: 900px) {
-    grid-template-columns: 1fr;
-  }
+const DashboardArea = styled.div`
+  flex: 1;
+  min-height: 0;
 `;
 
 function App() {
   return (
     <Page>
       <AppTitle>SpotScore — 창업 입지 추천 대시보드</AppTitle>
-      <IndustrySelector />
-      <MainGrid>
-        <RankingList />
-        <MapView />
-      </MainGrid>
-      <DetailPanel />
+      <DashboardArea>
+        <MapDashboard />
+      </DashboardArea>
     </Page>
   );
 }

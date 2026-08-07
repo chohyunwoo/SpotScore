@@ -19,7 +19,7 @@ export function useKakaoLoader(): KakaoLoaderStatus {
 
     const appKey = import.meta.env.VITE_KAKAO_MAP_APP_KEY;
     if (!appKey || appKey === 'YOUR_KAKAO_JS_KEY') {
-      console.warn('[MapView] Kakao Map 렌더링 실패: VITE_KAKAO_MAP_APP_KEY가 설정되지 않음');
+      console.warn('[MapDashboard] Kakao Map 렌더링 실패: VITE_KAKAO_MAP_APP_KEY가 설정되지 않음');
       setStatus('error');
       return;
     }
@@ -37,7 +37,7 @@ export function useKakaoLoader(): KakaoLoaderStatus {
     script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${appKey}&autoload=false`;
     script.onload = () => window.kakao.maps.load(() => setStatus('ready'));
     script.onerror = () => {
-      console.warn('[MapView] Kakao Map 렌더링 실패: SDK 스크립트 로드 실패');
+      console.warn('[MapDashboard] Kakao Map 렌더링 실패: SDK 스크립트 로드 실패');
       setStatus('error');
     };
     document.head.appendChild(script);

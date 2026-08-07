@@ -25,6 +25,18 @@ declare global {
       setCenter(latlng: LatLng): void;
       panTo(latlng: LatLng): void;
       setLevel(level: number): void;
+      setBounds(bounds: LatLngBounds): void;
+    }
+
+    /**
+     * REGION엔 폴리곤 없이 centroid만 있어 지역별 경계를 알 수 없다 - 대신 랭킹에
+     * 실린 모든 지역의 좌표를 감싸는 범위를 계산해 지도를 그 데이터에 맞게
+     * 자동으로 프레이밍할 때 쓴다(업종 전환 시 기본 줌이 전국 단위라 수백 개
+     * 지역 배지가 한 점으로 뭉쳐 보이는 문제를 막기 위함).
+     */
+    class LatLngBounds {
+      constructor();
+      extend(latlng: LatLng): void;
     }
 
     interface MarkerOptions {
@@ -42,6 +54,25 @@ declare global {
 
     namespace event {
       function addListener(target: Marker | Map, type: string, handler: () => void): void;
+    }
+
+    /**
+     * 지역 폴리곤 경계 데이터가 없어(REGION엔 centroid만 저장, CLAUDE.md) 좌표
+     * 하나에 임의 HTML(점수 배지)을 올리는 용도로만 씀 - 기본 Marker 아이콘 대신
+     * scoreScale 색으로 칠한 원형 배지를 지도 위에 그린다.
+     */
+    interface CustomOverlayOptions {
+      position: LatLng;
+      content: HTMLElement;
+      map?: Map;
+      xAnchor?: number;
+      yAnchor?: number;
+      zIndex?: number;
+    }
+
+    class CustomOverlay {
+      constructor(options: CustomOverlayOptions);
+      setMap(map: Map | null): void;
     }
 
     function load(callback: () => void): void;

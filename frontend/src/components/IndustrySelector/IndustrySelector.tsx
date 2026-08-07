@@ -6,26 +6,31 @@ import { useSelection } from '../../context/SelectionContext';
 const Wrapper = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  max-width: 320px;
+  gap: ${({ theme }) => theme.spacing.xs};
 `;
 
 const Label = styled.label`
-  font-size: 13px;
-  font-weight: 600;
+  font-size: ${({ theme }) => theme.typography.caption.size};
+  font-weight: ${({ theme }) => theme.typography.weight.semibold};
   color: ${({ theme }) => theme.colors.textSecondary};
 `;
 
 const Select = styled.select`
-  padding: 10px 12px;
-  border-radius: ${({ theme }) => theme.radius};
+  padding: ${({ theme }) => `10px ${theme.spacing.md}`};
+  border-radius: ${({ theme }) => theme.radius.sm};
   border: 1px solid ${({ theme }) => theme.colors.border};
   background: ${({ theme }) => theme.colors.surface};
-  font-size: 15px;
+  font-size: ${({ theme }) => theme.typography.body.size};
+  font-family: inherit;
   color: ${({ theme }) => theme.colors.textPrimary};
 
   &:invalid {
     color: ${({ theme }) => theme.colors.textSecondary};
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.accent};
+    outline-offset: 1px;
   }
 `;
 
@@ -34,13 +39,13 @@ const ToggleButton = styled.button`
   border: none;
   background: none;
   padding: 0;
-  font-size: 12px;
-  color: ${({ theme }) => theme.colors.primary};
+  font-size: ${({ theme }) => theme.typography.caption.size};
+  color: ${({ theme }) => theme.colors.accent};
   cursor: pointer;
   text-decoration: underline;
 
   &:hover {
-    color: ${({ theme }) => theme.colors.textPrimary};
+    color: ${({ theme }) => theme.colors.accentHover};
   }
 `;
 

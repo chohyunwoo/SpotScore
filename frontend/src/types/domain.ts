@@ -118,3 +118,17 @@ export interface ScoreDetail {
   competitionStat: CompetitionStatDetail | null;
   calculatedAt: string;
 }
+
+/**
+ * GET /api/v1/admin/score-weights 응답 아이템 (ScoreWeightConfigResponse.java 확인).
+ * weightKey는 SCORE_WEIGHT_CONFIG에 시딩된 키 그대로 온다 - 프론트에 값을
+ * 하드코딩하지 않고 항상 이 응답에서 읽는다(CLAUDE.md "가중치 숫자를 매직
+ * 넘버로 코드에 넣지 말 것"). ScoreWeightService가 실제 리프 가중치 계산에
+ * 쓰는 키: DEMAND_WEIGHT, SUPPLY_WEIGHT, DEMAND_POPULATION_RATIO,
+ * DEMAND_HOUSEHOLD_RATIO — 이 중 DEMAND_WEIGHT/SUPPLY_WEIGHT가 수요/공급
+ * 카드 하단 가중치 안내 문구에 쓰인다.
+ */
+export interface ScoreWeightConfig {
+  weightKey: string;
+  weightValue: number;
+}

@@ -11,10 +11,10 @@ export const GlobalStyle = createGlobalStyle`
 
   body {
     margin: 0;
-    background: ${({ theme }) => theme.colors.background};
+    /* 지도 대시보드 카드(순백)가 도드라지도록 페이지 캔버스는 라이트 그레이로 둔다. */
+    background: ${({ theme }) => theme.colors.backgroundAlt};
     color: ${({ theme }) => theme.colors.textPrimary};
-    font-family: 'Pretendard', 'Apple SD Gothic Neo', 'Malgun Gothic', -apple-system,
-      BlinkMacSystemFont, sans-serif;
+    font-family: ${({ theme }) => theme.typography.fontFamily};
   }
 
   button, select {

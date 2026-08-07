@@ -1,0 +1,420 @@
+import { useEffect, useRef } from 'react';
+import styled, { useTheme } from 'styled-components';
+import { useRanking } from '../../api/scores';
+import { useSelection } from '../../context/SelectionContext';
+import { IndustrySelector } from '../IndustrySelector/IndustrySelector';
+import { RegionIndustryDetailPanel } from '../RegionIndustryDetailPanel/RegionIndustryDetailPanel';
+import {
+  ATTRACTIVENESS_TIER_ICON,
+  ATTRACTIVENESS_TIER_LABEL,
+  getAttractivenessTierColor,
+} from '../../styles/attractivenessTier';
+import { getScoreScaleColor, getScoreScaleTextColor } from '../../styles/scoreScale';
+import type { AppTheme } from '../../styles/theme';
+import type { RankingItem } from '../../types/domain';
+import { useKakaoLoader } from './useKakaoLoader';
+
+// 지도에 표시할 데이터가 아직 없을 때만 쓰는 기본 중심 좌표(대한민국 국토 중앙 근사치).
+// 특정 지역명을 코드에 고정하는 것이 아니라, 좌표 데이터가 없을 때의 렌더링 fallback일 뿐임.
+const DEFAULT_CENTER = { latitude: 36.5, longitude: 127.8 };
+const DEFAULT_LEVEL = 13;
+const SELECTED_LEVEL = 5;
+const DETAIL_PANEL_WIDTH = '440px';
+
+const Layout = styled.div`
+  display: flex;
+  height: 100%;
+  background: ${({ theme }) => theme.colors.surface};
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  border-radius: ${({ theme }) => theme.radius.lg};
+  box-shadow: ${({ theme }) => theme.shadow.card};
+  overflow: hidden;
+
+  @media (max-width: ${({ theme }) => theme.breakpoint.tablet}) {
+    flex-direction: column;
+  }
+`;
+
+/**
+ * 지도(60~70%)가 주된 캔버스가 되도록 사이드바는 고정 폭으로 좁게 둔다
+ * (direction 3: "지도 중심 인터랙션"). CLAUDE.md가 확정한 "업종 선택 →
+ * 랭킹 리스트 + 지도(양방향 연동) → 상세 패널" 흐름을 지키기 위해 업종
+ * 토글과 랭킹 리스트를 이 사이드바에 함께 둔다.
+ */
+const Sidebar = styled.div`
+  width: 360px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid ${({ theme }) => theme.colors.border};
+  background: ${({ theme }) => theme.colors.backgroundAlt};
+
+  @media (max-width: ${({ theme }) => theme.breakpoint.tablet}) {
+    width: 100%;
+    max-height: 40%;
+    border-right: none;
+    border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+  }
+`;
+
+const SidebarHeader = styled.div`
+  padding: ${({ theme }) => theme.spacing.lg};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+  display: flex;
+  flex-direction: column;
+  gap: ${({ theme }) => theme.spacing.md};
+`;
+
+const RankingHeaderRow = styled.div`
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: ${({ theme }) => `${theme.spacing.md} ${theme.spacing.lg} ${theme.spacing.sm}`};
+`;
+
+const RankingTitle = styled.h2`
+  margin: 0;
+  font-size: ${({ theme }) => theme.typography.h3.size};
+  font-weight: ${({ theme }) => theme.typography.h3.weight};
+  color: ${({ theme }) => theme.colors.textPrimary};
+`;
+
+const RankingCount = styled.span`
+  font-size: ${({ theme }) => theme.typography.caption.size};
+  color: ${({ theme }) => theme.colors.textSecondary};
+`;
+
+const RankingScroll = styled.div`
+  flex: 1;
+  overflow-y: auto;
+`;
+
+const RankingRow = styled.button<{ $selected: boolean }>`
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: ${({ theme }) => theme.spacing.sm};
+  padding: ${({ theme }) => `${theme.spacing.sm} ${theme.spacing.lg}`};
+  border: none;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+  background: ${({ $selected, theme }) => ($selected ? theme.colors.accentSurface : 'transparent')};
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.accentSurface};
+  }
+`;
+
+const RankingRank = styled.span`
+  width: 20px;
+  flex-shrink: 0;
+  font-size: ${({ theme }) => theme.typography.caption.size};
+  color: ${({ theme }) => theme.colors.textSecondary};
+  font-weight: ${({ theme }) => theme.typography.weight.semibold};
+`;
+
+const TierDot = styled.span<{ $color: string }>`
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: ${({ $color }) => $color};
+`;
+
+const RankingRegionName = styled.span`
+  flex: 1;
+  font-size: ${({ theme }) => theme.typography.bodySmall.size};
+  font-weight: ${({ theme }) => theme.typography.weight.medium};
+  color: ${({ theme }) => theme.colors.textPrimary};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`;
+
+/**
+ * textPrimary로 고정 - scoreScale을 텍스트 색으로 쓰면 낮은 점수 구간(0~40점대)이
+ * 흰/연한 배경 위에서 WCAG 대비 1~2:1까지 떨어져 거의 안 보인다(실측 후 발견).
+ * 점수 구간 색 표현은 왼쪽 TierDot이 담당한다.
+ */
+const RankingScore = styled.span`
+  font-size: ${({ theme }) => theme.typography.bodySmall.size};
+  font-weight: ${({ theme }) => theme.typography.weight.bold};
+  color: ${({ theme }) => theme.colors.textPrimary};
+`;
+
+const SidebarEmptyState = styled.div`
+  padding: ${({ theme }) => theme.spacing.xl} ${({ theme }) => theme.spacing.lg};
+  text-align: center;
+  color: ${({ theme }) => theme.colors.textSecondary};
+  font-size: ${({ theme }) => theme.typography.bodySmall.size};
+  line-height: ${({ theme }) => theme.typography.body.lineHeight};
+`;
+
+const MapCanvasArea = styled.div`
+  flex: 1;
+  position: relative;
+  min-height: 420px;
+`;
+
+const MapContainer = styled.div`
+  position: absolute;
+  inset: 0;
+`;
+
+const EmptyOverlay = styled.div`
+  position: absolute;
+  inset: 0;
+  /* Kakao Maps SDK가 타일/오버레이 레이어에 z-index를 최대 2까지 직접 지정한다
+     (헤드리스 브라우저로 실제 렌더링 확인함) - 그보다 높여야 이 안내 문구가
+     지도 타일에 가려지지 않는다. */
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: ${({ theme }) => theme.spacing.xl};
+  text-align: center;
+  color: ${({ theme }) => theme.colors.textSecondary};
+  font-size: ${({ theme }) => theme.typography.body.size};
+  background: ${({ theme }) => theme.colors.surface};
+  opacity: 0.94;
+  pointer-events: none;
+`;
+
+const FallbackMessage = styled.div`
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: ${({ theme }) => theme.spacing.xl};
+  text-align: center;
+  color: ${({ theme }) => theme.colors.textSecondary};
+`;
+
+/** 지역 클릭 시 지도 우측에서 슬라이드 인 - 항상 마운트해 두고 transform으로만 여닫아 재요청 깜빡임을 없앤다. */
+const SlidePanel = styled.div<{ $open: boolean }>`
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 100%;
+  width: ${DETAIL_PANEL_WIDTH};
+  max-width: 100%;
+  background: ${({ theme }) => theme.colors.surface};
+  border-left: 1px solid ${({ theme }) => theme.colors.border};
+  box-shadow: ${({ theme }) => theme.shadow.panel};
+  z-index: 20;
+  transform: translateX(${({ $open }) => ($open ? '0' : '100%')});
+  transition: transform 0.25s ease;
+  pointer-events: ${({ $open }) => ($open ? 'auto' : 'none')};
+`;
+
+function buildScoreBadgeElement(
+  item: RankingItem,
+  theme: AppTheme,
+  isSelected: boolean,
+  onClick: () => void,
+): HTMLDivElement {
+  const el = document.createElement('div');
+  el.textContent = String(Math.round(item.totalScore));
+  el.title = `${item.regionName} · ${ATTRACTIVENESS_TIER_LABEL[item.attractivenessTier]}`;
+  el.style.display = 'flex';
+  el.style.alignItems = 'center';
+  el.style.justifyContent = 'center';
+  el.style.width = isSelected ? '40px' : '34px';
+  el.style.height = isSelected ? '40px' : '34px';
+  el.style.borderRadius = '50%';
+  el.style.background = getScoreScaleColor(item.totalScore, theme);
+  el.style.color = getScoreScaleTextColor(item.totalScore, theme);
+  el.style.fontFamily = theme.typography.fontFamily;
+  el.style.fontSize = '13px';
+  el.style.fontWeight = String(theme.typography.weight.bold);
+  el.style.border = `2px solid ${isSelected ? theme.colors.accent : theme.colors.surface}`;
+  el.style.boxShadow = theme.shadow.card;
+  el.style.cursor = 'pointer';
+  el.style.transform = 'translate(-50%, -50%)';
+  el.addEventListener('click', onClick);
+  return el;
+}
+
+export function MapDashboard() {
+  const { industryCode, regionCode, setRegionCode } = useSelection();
+  const { data: ranking, isLoading, isError } = useRanking(industryCode);
+  const kakaoStatus = useKakaoLoader();
+  const theme = useTheme();
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<kakao.maps.Map | null>(null);
+  const overlaysRef = useRef<Map<string, kakao.maps.CustomOverlay>>(new Map());
+  const boundsFittedForIndustryRef = useRef<string | null>(null);
+
+  // 지도 인스턴스 초기화 (SDK 준비된 이후 1회)
+  useEffect(() => {
+    if (kakaoStatus !== 'ready' || !containerRef.current || mapRef.current) {
+      return;
+    }
+
+    mapRef.current = new window.kakao.maps.Map(containerRef.current, {
+      center: new window.kakao.maps.LatLng(DEFAULT_CENTER.latitude, DEFAULT_CENTER.longitude),
+      level: DEFAULT_LEVEL,
+    });
+  }, [kakaoStatus]);
+
+  // 랭킹 데이터/선택 지역이 바뀔 때마다 점수 배지 오버레이를 다시 그리기.
+  // RankingItem.latitude/longitude는 좌표 시딩 전 지역은 null일 수 있으므로
+  // 그런 지역만 개별적으로 오버레이 생성을 건너뛴다(전체를 막지 않음).
+  useEffect(() => {
+    const map = mapRef.current;
+    if (kakaoStatus !== 'ready' || !map) {
+      return;
+    }
+
+    overlaysRef.current.forEach((overlay) => overlay.setMap(null));
+    overlaysRef.current.clear();
+
+    (ranking ?? []).forEach((item) => {
+      const { latitude, longitude } = item;
+      if (latitude === null || longitude === null) {
+        console.warn('[MapDashboard] 좌표 시딩 전(null)이라 점수 배지를 표시하지 못함', item.regionCode);
+        return;
+      }
+
+      const element = buildScoreBadgeElement(item, theme, item.regionCode === regionCode, () =>
+        setRegionCode(item.regionCode),
+      );
+
+      const overlay = new window.kakao.maps.CustomOverlay({
+        position: new window.kakao.maps.LatLng(latitude, longitude),
+        content: element,
+        map,
+        yAnchor: 0.5,
+        xAnchor: 0.5,
+      });
+
+      overlaysRef.current.set(item.regionCode, overlay);
+    });
+  }, [ranking, kakaoStatus, regionCode, setRegionCode, theme]);
+
+  // 업종을 고르면(=랭킹이 처음 도착하면) 기본 줌(전국)이 아니라 그 업종의 실제
+  // 지역 분포에 맞춰 지도를 자동으로 프레이밍한다 - REGION에 폴리곤이 없어 경계를
+  // 알 수 없으므로, 랭킹에 실린 좌표들을 감싸는 범위로 근사한다. 업종당 1회만
+  // 맞추고(같은 업종 안에서 지역 클릭 시 아래 효과가 그 지역으로 다시 줌인한다),
+  // 지역 선택을 지우고 업종만 다시 볼 때 매번 재프레이밍되지 않게 한다.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (kakaoStatus !== 'ready' || !map || !industryCode || !ranking || ranking.length === 0) {
+      return;
+    }
+    if (boundsFittedForIndustryRef.current === industryCode) {
+      return;
+    }
+
+    const bounds = new window.kakao.maps.LatLngBounds();
+    let hasCoordinate = false;
+    ranking.forEach((item) => {
+      if (item.latitude !== null && item.longitude !== null) {
+        bounds.extend(new window.kakao.maps.LatLng(item.latitude, item.longitude));
+        hasCoordinate = true;
+      }
+    });
+
+    if (hasCoordinate) {
+      map.setBounds(bounds);
+      boundsFittedForIndustryRef.current = industryCode;
+    }
+  }, [ranking, kakaoStatus, industryCode]);
+
+  // 랭킹 리스트에서 선택된 지역이 바뀌면 해당 좌표로 지도 이동 (양방향 연동)
+  useEffect(() => {
+    const map = mapRef.current;
+    if (kakaoStatus !== 'ready' || !map || !regionCode) {
+      return;
+    }
+
+    const selected = ranking?.find((item) => item.regionCode === regionCode);
+    if (!selected || selected.latitude === null || selected.longitude === null) {
+      return;
+    }
+
+    // 주의: panTo(애니메이션) 직후 setLevel을 바로 호출하면 카카오맵 SDK가 팬
+    // 애니메이션이 끝나기 전에 끊어버리고 이전 중심 좌표로 되돌아가는 문제가 실제로
+    // 발생함(헤드리스 브라우저로 재현 확인). setCenter(즉시 이동)로 경쟁 상태를 없앤다.
+    map.setCenter(new window.kakao.maps.LatLng(selected.latitude, selected.longitude));
+    map.setLevel(SELECTED_LEVEL);
+  }, [regionCode, ranking, kakaoStatus]);
+
+  const rankingList = ranking ?? [];
+
+  return (
+    <Layout>
+      <Sidebar>
+        <SidebarHeader>
+          <IndustrySelector />
+        </SidebarHeader>
+        <RankingHeaderRow>
+          <RankingTitle>랭킹</RankingTitle>
+          {industryCode && !isLoading && !isError && <RankingCount>{rankingList.length}개 지역</RankingCount>}
+        </RankingHeaderRow>
+        <RankingScroll>
+          {!industryCode && <SidebarEmptyState>업종을 먼저 선택해주세요.</SidebarEmptyState>}
+          {industryCode && isLoading && <SidebarEmptyState>랭킹을 불러오는 중...</SidebarEmptyState>}
+          {industryCode && isError && (
+            <SidebarEmptyState>랭킹을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.</SidebarEmptyState>
+          )}
+          {industryCode && !isLoading && !isError && rankingList.length === 0 && (
+            <SidebarEmptyState>아직 집계된 데이터가 없습니다. 배치 작업 완료 후 다시 확인해주세요.</SidebarEmptyState>
+          )}
+          {industryCode &&
+            !isLoading &&
+            !isError &&
+            rankingList.map((item, index) => (
+              <RankingRow
+                key={item.regionCode}
+                type="button"
+                $selected={item.regionCode === regionCode}
+                onClick={() => setRegionCode(item.regionCode)}
+              >
+                <RankingRank>{index + 1}</RankingRank>
+                <TierDot
+                  $color={getAttractivenessTierColor(item.attractivenessTier, theme)}
+                  title={ATTRACTIVENESS_TIER_ICON[item.attractivenessTier]}
+                />
+                <RankingRegionName>{item.regionName}</RankingRegionName>
+                <RankingScore>{item.totalScore}</RankingScore>
+              </RankingRow>
+            ))}
+        </RankingScroll>
+      </Sidebar>
+
+      <MapCanvasArea>
+        {kakaoStatus === 'error' ? (
+          <FallbackMessage>
+            지도를 불러올 수 없습니다. VITE_KAKAO_MAP_APP_KEY 설정을 확인해주세요.
+          </FallbackMessage>
+        ) : (
+          <>
+            <MapContainer ref={containerRef} />
+            {!industryCode && (
+              <EmptyOverlay>
+                업종을 선택하면 지역별 점수가 지도에 표시됩니다.
+                <br />
+                점수는 지역만으로는 계산되지 않고, 지역 × 업종 조합에서만 산출돼요.
+              </EmptyOverlay>
+            )}
+            {industryCode && isLoading && <EmptyOverlay>점수를 불러오는 중...</EmptyOverlay>}
+            {industryCode && isError && (
+              <EmptyOverlay>지도 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.</EmptyOverlay>
+            )}
+            {industryCode && !isLoading && !isError && rankingList.length === 0 && (
+              <EmptyOverlay>아직 집계된 데이터가 없습니다. 배치 작업 완료 후 다시 확인해주세요.</EmptyOverlay>
+            )}
+          </>
+        )}
+
+        <SlidePanel $open={Boolean(regionCode && industryCode)} aria-hidden={!regionCode}>
+          <RegionIndustryDetailPanel />
+        </SlidePanel>
+      </MapCanvasArea>
+    </Layout>
+  );
+}

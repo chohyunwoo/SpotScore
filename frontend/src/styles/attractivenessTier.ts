@@ -20,17 +20,23 @@ export const ATTRACTIVENESS_TIER_ICON: Record<AttractivenessTier, string> = {
   CAUTION: '🔍',
 };
 
-/** ATTRACTIVE는 눈에 띄는 색, CAUTION은 차분한 색으로 - 위험 경고가 아니라 "재검토 권장" 톤이라 danger는 쓰지 않는다. */
+/**
+ * 여러 색을 섞은 신호등식 배색 대신, accent와 동일한 단일 색상 스케일
+ * (theme.colors.scoreScale)에서 4단계만 골라 쓴다 — ATTRACTIVE가 가장 짙은
+ * accent 그 자체, CAUTION은 위험 경고가 아니라 "재검토 권장" 톤이라 가장 옅은
+ * 단계로 차분하게 표현한다.
+ */
 export function getAttractivenessTierColor(tier: AttractivenessTier, theme: DefaultTheme): string {
+  const scale = theme.colors.scoreScale;
   switch (tier) {
     case 'ATTRACTIVE':
-      return theme.colors.success;
+      return scale[4] ?? theme.colors.accent;
     case 'GOOD':
-      return theme.colors.primary;
+      return scale[3] ?? theme.colors.accent;
     case 'AVERAGE':
-      return theme.colors.warning;
+      return scale[2] ?? theme.colors.accent;
     case 'CAUTION':
-      return theme.colors.muted;
+      return theme.colors.textTertiary;
   }
 }
 
