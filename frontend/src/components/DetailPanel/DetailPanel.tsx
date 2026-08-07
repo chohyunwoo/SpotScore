@@ -93,12 +93,30 @@ const RawValue = styled.div`
   margin-top: 4px;
 `;
 
+/** 세 지표 모두 "높을수록 좋다"는 동일한 규칙이지만, 경쟁 여유도는 이름만 보면
+ * "경쟁이 많을수록 높은 점수"로 오독하기 쉬워 카드 안에 규칙을 명시한다. */
+const BreakdownHint = styled.div`
+  font-size: 11px;
+  color: ${({ theme }) => theme.colors.textSecondary};
+  margin-top: 6px;
+  line-height: 1.4;
+`;
+
+const BadgeHint = styled.div`
+  margin-top: 6px;
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.textSecondary};
+`;
+
 const ChartWrapper = styled.div`
   height: 220px;
   margin-top: 24px;
 `;
 
 const NA = 'N/A';
+// "0점"과 혼동되지 않도록 densityScore/totalScore가 null일 때 쓰는 전용 라벨
+// (ScoreCalculationService의 B-2 최소 인구 기준 미만 — 창업매력도_정의_재검토_기록.md 10절).
+const INSUFFICIENT_SAMPLE_LABEL = '데이터 부족';
 
 export function DetailPanel() {
   const { industryCode, regionCode } = useSelection();
@@ -132,6 +150,10 @@ export function DetailPanel() {
       if (detail.populationStat.avgHouseholdSize == null) missing.push('populationStat.avgHouseholdSize');
     }
     if (!detail.competitionStat) missing.push('competitionStat');
+    // ScoreCalculationService의 B-2 최소 인구 기준(100명) 미만 지역은 densityScore/totalScore가
+    // 의도적으로 null(비공개 N/A와는 다른 "산출 대상 제외" 케이스지만, 로깅 가이드상 동일하게
+    // WARN + 필드명 기록).
+    if (detail.densityScore === null) missing.push('densityScore(인구 표본 부족)');
     return missing;
   }, [detail]);
 
@@ -180,10 +202,11 @@ export function DetailPanel() {
     );
   }
 
+  // densityScore가 null(인구 표본 부족)이면 0점으로 오독될 수 있어 차트 자체에서 막대를 뺀다.
   const chartData = [
     { name: '인구 규모', score: detail.populationScore },
     { name: '가구 구조', score: detail.householdScore },
-    { name: '경쟁 밀집도', score: detail.densityScore },
+    ...(detail.densityScore !== null ? [{ name: '경쟁 여유도', score: detail.densityScore }] : []),
   ];
 
   return (
@@ -193,15 +216,29 @@ export function DetailPanel() {
           {detail.regionName} · {detail.industryName}
         </RegionTitle>
         {rankingItem && (
-          <TierBadge $color={getAttractivenessTierColor(rankingItem.attractivenessTier, theme)}>
-            {ATTRACTIVENESS_TIER_ICON[rankingItem.attractivenessTier]} {formatPercentileLabel(rankingItem.percentileRank)}{' '}
-            · {ATTRACTIVENESS_TIER_LABEL[rankingItem.attractivenessTier]}
-          </TierBadge>
+          <>
+            <TierBadge $color={getAttractivenessTierColor(rankingItem.attractivenessTier, theme)}>
+              {ATTRACTIVENESS_TIER_ICON[rankingItem.attractivenessTier]} {formatPercentileLabel(rankingItem.percentileRank)}{' '}
+              · {ATTRACTIVENESS_TIER_LABEL[rankingItem.attractivenessTier]}
+            </TierBadge>
+            <BadgeHint>
+              단순히 "인기 있는 곳"이 아니라, 수요는 충분하면서 그 수요 대비 경쟁은
+              상대적으로 여유 있는 곳을 뜻해요.
+            </BadgeHint>
+          </>
         )}
         <TotalScoreSecondary>
           종합 점수
-          <TotalScoreValue $color={getScoreColor(detail.totalScore, theme)}>{detail.totalScore}</TotalScoreValue>
+          <TotalScoreValue $color={getScoreColor(detail.totalScore, theme)}>
+            {detail.totalScore !== null ? detail.totalScore : INSUFFICIENT_SAMPLE_LABEL}
+          </TotalScoreValue>
         </TotalScoreSecondary>
+        {detail.totalScore === null && (
+          <BadgeHint>
+            이 지역은 인구 표본이 너무 작아(100명 미만) 경쟁 여유도를 산출할 수 없고, 그 결과
+            종합 점수도 함께 제공되지 않아요.
+          </BadgeHint>
+        )}
       </TitleRow>
 
       <BreakdownGrid>
@@ -240,15 +277,31 @@ export function DetailPanel() {
         </BreakdownCard>
 
         <BreakdownCard>
-          <BreakdownLabel>③ 경쟁 밀집도</BreakdownLabel>
+          <BreakdownLabel>③ 경쟁 여유도</BreakdownLabel>
           <BreakdownScore $color={getScoreColor(detail.densityScore, theme)}>
-            {detail.densityScore}
+            {detail.densityScore !== null ? detail.densityScore : INSUFFICIENT_SAMPLE_LABEL}
           </BreakdownScore>
           <RawValue>
             동일 업종 업소 수{' '}
-            {detail.competitionStat != null ? `${detail.competitionStat.storeCount.toLocaleString()}개` : NA}
+            {detail.competitionStat != null
+              ? `${detail.competitionStat.storeCount.toLocaleString()}개${
+                  detail.competitionStat.storeCountPerCapita != null
+                    ? ` (인구 1만명당 ${detail.competitionStat.storeCountPerCapita.toFixed(1)}개)`
+                    : ''
+                }`
+              : NA}
           </RawValue>
           <RawValue>기준일 {detail.competitionStat?.snapshotDate ?? NA}</RawValue>
+          {detail.densityScore !== null ? (
+            <BreakdownHint title="인구 대비 동일 업종 밀도가 낮을수록(경쟁이 적을수록) 점수가 높습니다.">
+              점수가 높을수록 경쟁이 적어 여유 있음을 의미해요.
+            </BreakdownHint>
+          ) : (
+            <BreakdownHint title="ScoreCalculationService의 최소 인구 기준(100명) 미만 지역은 밀도 이상치가 전체 순위를 왜곡하지 않도록 산출 대상에서 제외합니다.">
+              인구 표본이 너무 작아(100명 미만) 경쟁 여유도를 산출할 수 없어요. 0점이 아니라
+              "산출 불가"예요.
+            </BreakdownHint>
+          )}
         </BreakdownCard>
       </BreakdownGrid>
 

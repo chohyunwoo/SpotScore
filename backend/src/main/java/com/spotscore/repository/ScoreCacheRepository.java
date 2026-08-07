@@ -18,13 +18,18 @@ public interface ScoreCacheRepository extends JpaRepository<ScoreCache, Long> {
     // PERCENT_RANK()로 조회 시점에 계산한다(score_cache에는 저장하지 않음 - API
     // 명세서 5.2.3절). 윈도우 함수는 JPQL이 지원하지 않아 네이티브 쿼리로 두고,
     // 프로젝션(RankingProjection)의 getter 이름을 컬럼 별칭과 맞춘다.
+    //
+    // total_score IS NOT NULL: B-2(ScoreCalculationService)부터 인구 100명 미만
+    // 지역x업종 조합은 total_score가 null로 저장된다 - "다른 지역의 순위 계산에도
+    // 영향 주지 않도록 완전히 배제"하기 위해 랭킹/퍼센타일 모집단에서 아예 제외한다
+    // (포함시키면 PERCENT_RANK가 NULL을 극단값으로 취급해 순위가 왜곡된다).
     @Query(value = "SELECT sc.region_code AS regionCode, r.region_name AS regionName, " +
             "sc.total_score AS totalScore, sc.population_score AS populationScore, " +
             "sc.household_score AS householdScore, sc.density_score AS densityScore, " +
             "r.latitude AS latitude, r.longitude AS longitude, " +
             "PERCENT_RANK() OVER (PARTITION BY sc.industry_code ORDER BY sc.total_score DESC) * 100 AS percentileRank " +
             "FROM score_cache sc JOIN region r ON r.region_code = sc.region_code " +
-            "WHERE sc.industry_code = :industryCode " +
+            "WHERE sc.industry_code = :industryCode AND sc.total_score IS NOT NULL " +
             "ORDER BY sc.total_score DESC",
             nativeQuery = true)
     List<RankingProjection> findRankingWithPercentile(@Param("industryCode") String industryCode);

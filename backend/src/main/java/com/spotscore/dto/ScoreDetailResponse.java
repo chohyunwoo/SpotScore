@@ -7,6 +7,7 @@ import com.spotscore.domain.ScoreCache;
 import com.spotscore.domain.StoreCount;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
@@ -65,20 +66,35 @@ public record ScoreDetailResponse(
 
     public record CompetitionStatDetail(
             Integer storeCount,
-            LocalDate snapshotDate
+            LocalDate snapshotDate,
+            BigDecimal storeCountPerCapita
     ) {
 
-        static CompetitionStatDetail from(StoreCount entity) {
+        static CompetitionStatDetail from(StoreCount entity, Long totalPopulation) {
             if (entity == null) {
                 return null;
             }
-            return new CompetitionStatDetail(entity.getStoreCount(), entity.getSnapshotDate());
+            return new CompetitionStatDetail(entity.getStoreCount(), entity.getSnapshotDate(),
+                    calculatePerCapita(entity.getStoreCount(), totalPopulation));
+        }
+
+        // densityScore 계산(ScoreCalculationService)과 동일하게 인구 대비 밀도를 쓰되,
+        // 여기서는 화면에 그대로 노출할 절대 지표(인구 1만명당 업소 수)로 표현한다.
+        // 인구 데이터가 없거나 0이면 억지로 값을 만들지 않고 null로 둔다.
+        private static BigDecimal calculatePerCapita(int storeCount, Long totalPopulation) {
+            if (totalPopulation == null || totalPopulation <= 0) {
+                return null;
+            }
+            return BigDecimal.valueOf(storeCount)
+                    .multiply(BigDecimal.valueOf(10_000))
+                    .divide(BigDecimal.valueOf(totalPopulation), 1, RoundingMode.HALF_UP);
         }
     }
 
     public static ScoreDetailResponse of(ScoreCache scoreCache, PopulationStat populationStat, StoreCount storeCount) {
         Region region = scoreCache.getRegion();
         IndustryCategory industry = scoreCache.getIndustry();
+        Long totalPopulation = populationStat == null ? null : populationStat.getTotalPopulation();
         return new ScoreDetailResponse(
                 region.getRegionCode(),
                 region.getRegionName(),
@@ -89,7 +105,7 @@ public record ScoreDetailResponse(
                 scoreCache.getHouseholdScore(),
                 scoreCache.getDensityScore(),
                 PopulationStatDetail.from(populationStat),
-                CompetitionStatDetail.from(storeCount),
+                CompetitionStatDetail.from(storeCount, totalPopulation),
                 scoreCache.getCalculatedAt()
         );
     }

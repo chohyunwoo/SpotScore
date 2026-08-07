@@ -23,7 +23,14 @@ export interface IndustryCategory {
  */
 export type AttractivenessTier = 'ATTRACTIVE' | 'GOOD' | 'AVERAGE' | 'CAUTION';
 
-/** GET /api/v1/scores/ranking?industryCode=... 응답 아이템 (RankingItem.java 확인) */
+/**
+ * GET /api/v1/scores/ranking?industryCode=... 응답 아이템 (RankingItem.java 확인).
+ * ScoreCalculationService가 B-2(2026-08)부터 인구 100명 미만 지역×업종 조합은
+ * densityScore/totalScore를 null로 저장하지만, ScoreCacheRepository.findRankingWithPercentile이
+ * `total_score IS NOT NULL`로 그런 행을 랭킹/퍼센타일 모집단에서 애초에 제외한다
+ * (DB에서 직접 확인: 둔촌1동(인구 19명)은 어떤 industryCode로도 랭킹에 나오지 않음) —
+ * 그래서 이 응답에 실리는 totalScore/densityScore는 항상 non-null이 보장된다.
+ */
 export interface RankingItem {
   regionCode: string;
   regionName: string;
@@ -68,10 +75,15 @@ export interface PopulationStatDetail {
   avgHouseholdSize: number | null;
 }
 
-/** ScoreDetailResponse.CompetitionStatDetail 확인 — store_count.store_count/snapshot_date는 NOT NULL */
+/**
+ * ScoreDetailResponse.CompetitionStatDetail 확인 — store_count.store_count/snapshot_date는
+ * NOT NULL. storeCountPerCapita(2026-08 추가, 인구 1만명당 동일 업종 업소 수)는 인구 데이터가
+ * 없거나 0인 지역에서 null(populationStat이 null인 경우와 동일한 원칙) — nullable 유지.
+ */
 export interface CompetitionStatDetail {
   storeCount: number;
   snapshotDate: string;
+  storeCountPerCapita: number | null;
 }
 
 /** GET /api/v1/scores/detail?regionCode=...&industryCode=... 응답 (ScoreDetailResponse.java 확인) */
@@ -80,10 +92,21 @@ export interface ScoreDetail {
   regionName: string;
   industryCode: string;
   industryName: string;
-  totalScore: number;
+  /**
+   * densityScore와 함께 null일 수 있음 — 아래 densityScore 주석 참고. 랭킹과 달리
+   * 이 엔드포인트(ScoreQueryService.getDetail)는 region+industry로 직접 조회해
+   * total_score IS NOT NULL 필터가 없으므로, 인구 100명 미만 지역은 그대로 null이 온다.
+   */
+  totalScore: number | null;
   populationScore: number;
   householdScore: number;
-  densityScore: number;
+  /**
+   * ScoreCalculationService의 B-2 최소 인구 기준(MIN_POPULATION_FOR_DENSITY=100) 미만인
+   * 지역은 밀도 이상치(예: 인구 19명)가 퍼센타일 전체를 왜곡하는 것을 막기 위해
+   * densityScore를 계산하지 않고 null로 저장한다(그 값에 의존하는 totalScore도 함께 null).
+   * "0점"과 구분되는 값이므로 DetailPanel은 반드시 별도 문구로 표시해야 한다.
+   */
+  densityScore: number | null;
   /**
    * ScoreQueryService.getDetail()가 해당 지역에 population_stat row 자체가 없으면
    * .orElse(null) → PopulationStatDetail.from(null)이 통째로 null을 반환한다.

@@ -23,15 +23,24 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * 정규화(min-max) + 하이브리드 AHP 가중치로 지역 x 업종 조합 점수를 계산해
- * SCORE_CACHE에 저장한다. 정규화는 "이번 배치에서 수집된 지역 전체"를 모집단으로
- * 삼아 상대 비교하므로, 특정 배치 시점(year/snapshotDate)에 수집된 전체 데이터를
- * 대상으로 다시 계산한다.
+ * 정규화 + 하이브리드 AHP 가중치로 지역 x 업종 조합 점수를 계산해 SCORE_CACHE에
+ * 저장한다. 정규화는 "이번 배치에서 수집된 지역 전체"를 모집단으로 삼아 상대
+ * 비교하므로, 특정 배치 시점(year/snapshotDate)에 수집된 전체 데이터를 대상으로
+ * 다시 계산한다.
+ *
+ * densityScore는 B-2(퍼센타일 랭크 + 최소 인구 기준)로 계산한다 - 인구 대비
+ * 밀도를 그대로 min-max 정규화하던 B-1은 극단 이상치(예: 인구 19명 지역) 하나가
+ * 전체 스케일을 왜곡하는 결함이 있어 교체됨(창업매력도_정의_재검토_기록.md 10절).
  */
 @Service
 public class ScoreCalculationService {
 
     private static final Logger log = LoggerFactory.getLogger(ScoreCalculationService.class);
+
+    // 통계적으로 도출된 값이 아니라 실무적 판단값 - 이 인구 미만인 지역은 해당
+    // 업종에 대해 densityScore/totalScore를 계산하지 않고(다른 지역 순위 계산의
+    // 모집단에서도 제외), 값을 임의로 만들지 않고 null로 응답한다.
+    private static final int MIN_POPULATION_FOR_DENSITY = 100;
 
     private final PopulationStatRepository populationStatRepository;
     private final StoreCountRepository storeCountRepository;
@@ -90,26 +99,58 @@ public class ScoreCalculationService {
         LeafWeights weights = scoreWeightService.loadLeafWeights();
 
         int cacheSaved = 0;
+        int densityExcludedLowPopulation = 0;
         for (Map.Entry<IndustryCategory, Map<Region, Double>> entry : rawCompetitionByIndustry.entrySet()) {
             IndustryCategory industry = entry.getKey();
             Map<Region, Double> rawCounts = entry.getValue();
-            Map<Region, Double> competitionNormalized =
-                    MinMaxNormalizer.normalize(rawCounts, "competition_density:" + industry.getIndustryCode());
+
+            // 업소 개수 자체가 아니라 인구 대비 밀도(업소 수 / 총인구)로 경쟁 강도를 계산하되,
+            // 인구 MIN_POPULATION_FOR_DENSITY 미만인 지역은 이 업종의 밀도 비교 모집단
+            // 자체에서 완전히 제외한다 - 극단적으로 작은 인구가 만드는 이상치 값이 다른
+            // 지역의 퍼센타일 순위에까지 영향을 주지 않도록 하기 위함(B-1의 결함 원인).
+            Map<Region, Double> eligibleRawDensity = new LinkedHashMap<>();
+            for (Map.Entry<Region, Double> countEntry : rawCounts.entrySet()) {
+                Region region = countEntry.getKey();
+                Double population = rawPopulation.get(region);
+                if (population == null || population < MIN_POPULATION_FOR_DENSITY) {
+                    log.warn("정규화 스킵 - regionCode: {}, industryCode: {} 인구 {}명 미만(또는 없음)이라 " +
+                                    "densityScore 계산 대상에서 제외 (totalScore도 함께 null)",
+                            region.getRegionCode(), industry.getIndustryCode(), MIN_POPULATION_FOR_DENSITY);
+                    continue;
+                }
+                eligibleRawDensity.put(region, countEntry.getValue() / population);
+            }
+
+            // ScoreCacheRepository.findRankingWithPercentile / AttractivenessTier가 쓰는 것과
+            // 동일한 PERCENT_RANK 정의를 재사용한다(PercentileRankNormalizer 참고).
+            Map<Region, Double> densityPercentile = PercentileRankNormalizer.ascendingPercentRank(
+                    eligibleRawDensity, "competition_density:" + industry.getIndustryCode());
 
             for (Region region : rawCounts.keySet()) {
                 Double populationNorm = populationNormalized.get(region);
                 Double householdNorm = householdNormalized.get(region);
-                Double competitionNorm = competitionNormalized.get(region);
-                if (populationNorm == null || householdNorm == null || competitionNorm == null) {
+                if (populationNorm == null || householdNorm == null) {
                     log.warn("점수 계산 스킵 - regionCode: {}, industryCode: {} 브레이크다운 원자료 일부 누락",
                             region.getRegionCode(), industry.getIndustryCode());
                     continue;
                 }
 
-                // 업소 수가 많을수록 경쟁이 치열해 창업 매력도는 낮아지므로 정규화 값을 역수화한다.
                 double populationScore = populationNorm * 100;
                 double householdScore = householdNorm * 100;
-                double densityScore = (1 - competitionNorm) * 100;
+
+                Double percentile = densityPercentile.get(region);
+                if (percentile == null) {
+                    // population < MIN_POPULATION_FOR_DENSITY - densityScore를 임의로
+                    // 추정하지 않고, 그 값에 의존하는 totalScore도 함께 null로 둔다
+                    // (populationStat null 처리와 동일한 컨벤션).
+                    densityExcludedLowPopulation++;
+                    saveScoreCache(region, industry, null, populationScore, householdScore, null);
+                    cacheSaved++;
+                    continue;
+                }
+
+                // 인구 대비 업소 밀도의 순위가 높을수록(=과열) 창업 매력도는 낮아지므로 퍼센타일을 역수화한다.
+                double densityScore = (1 - percentile) * 100;
                 double totalScore = weights.populationWeight() * populationScore
                         + weights.householdWeight() * householdScore
                         + weights.competitionWeight() * densityScore;
@@ -124,12 +165,14 @@ public class ScoreCalculationService {
             }
         }
 
-        log.info("점수 재계산 완료 - year: {}, snapshotDate: {}, score_cache 저장 {}건", year, snapshotDate, cacheSaved);
+        log.info("점수 재계산 완료 - year: {}, snapshotDate: {}, score_cache 저장 {}건 (그 중 인구 {}명 미만으로 " +
+                        "densityScore/totalScore null 처리 {}건)",
+                year, snapshotDate, cacheSaved, MIN_POPULATION_FOR_DENSITY, densityExcludedLowPopulation);
         return cacheSaved;
     }
 
-    private void saveScoreCache(Region region, IndustryCategory industry, double totalScore,
-                                 double populationScore, double householdScore, double densityScore) {
+    private void saveScoreCache(Region region, IndustryCategory industry, Double totalScore,
+                                 double populationScore, double householdScore, Double densityScore) {
         LocalDateTime calculatedAt = LocalDateTime.now();
         BigDecimal totalScoreRounded = round(totalScore);
         BigDecimal populationScoreRounded = round(populationScore);
@@ -145,7 +188,7 @@ public class ScoreCalculationService {
                 );
     }
 
-    private static BigDecimal round(double value) {
-        return BigDecimal.valueOf(value).setScale(2, RoundingMode.HALF_UP);
+    private static BigDecimal round(Double value) {
+        return value == null ? null : BigDecimal.valueOf(value).setScale(2, RoundingMode.HALF_UP);
     }
 }

@@ -1,3 +1,5 @@
+# CLAUDE.md
+
 이 파일은 Claude Code가 이 저장소에서 작업할 때 참고하는 프로젝트 컨텍스트입니다.
 
 ## 프로젝트 개요
@@ -11,24 +13,24 @@
 ## 확정 기술 스택
 
 | 영역 | 선택 | 비고 |
-| --- | --- | --- |
+|---|---|---|
 | 백엔드 | Spring Boot (Gradle) | Java 경험은 있으나 Python 경험 없음 → Python 스택 배제하고 Spring 선택 |
-| 프론트엔드 | React |  |
+| 프론트엔드 | React | |
 | DB | PostgreSQL | 관계형 구조(지역 × 업종 = 점수), 추후 PostGIS 확장 가능 |
 | 외부 API 호출 | WebClient | 비동기 병렬 호출(SGIS + 상권정보) |
 | 배치 스케줄링 | Spring `@Scheduled` | 월 1회 배치 |
-| DB 접근(ORM) | Spring Data JPA |  |
-| 지도 시각화 | Kakao Map API |  |
-| 차트(브레이크다운) | Recharts |  |
-| 데이터 페칭 | TanStack Query |  |
-| 상태관리 | React Context API |  |
+| DB 접근(ORM) | Spring Data JPA | |
+| 지도 시각화 | Kakao Map API | |
+| 차트(브레이크다운) | Recharts | |
+| 데이터 페칭 | TanStack Query | |
+| 상태관리 | React Context API | |
 | DB 실행 환경 | Docker Compose | 팀 전체 동일 DB 버전/설정 재현 |
 | 스키마 마이그레이션 | Flyway | 스키마 변경 이력 추적, 확장성 원칙 준수 검증 |
-| 환경 분리 | Spring Profile (dev/prod) |  |
-| 백엔드 빌드 도구 | Gradle (Groovy DSL) |  |
-| API 예외 처리 | `@ControllerAdvice` 전역 처리 |  |
-| API 문서화 | Springdoc OpenAPI(Swagger UI) |  |
-| 프론트 빌드 도구 | Vite |  |
+| 환경 분리 | Spring Profile (dev/prod) | |
+| 백엔드 빌드 도구 | Gradle (Groovy DSL) | |
+| API 예외 처리 | `@ControllerAdvice` 전역 처리 | |
+| API 문서화 | Springdoc OpenAPI(Swagger UI) | |
+| 프론트 빌드 도구 | Vite | |
 | 프론트 언어 | TypeScript | API 응답 필드 타입 안정성 확보 |
 | 스타일링 | styled-components | 점수 구간별 동적 색상 표현에 유리 |
 
@@ -37,16 +39,14 @@
 프로젝트 검토 과정에서 서울 실시간 도시데이터, 지자체별 유동인구 API 등은 지역 제한/신뢰도 문제로 **의도적으로 제외**했음. 코드에 새 공공데이터 API를 추가하기 전에 반드시 팀 논의를 거칠 것.
 
 ### 1. SGIS (통계지리정보서비스) — 통계청
-
 - Base URL: `https://sgisapi.kostat.go.kr/OpenAPI3`
 - 인증: `auth/authentication.json`에 consumer_key/secret → accessToken 발급 (만료 있음, 재발급 로직 필요)
 - 핵심 엔드포인트: `stats/population.json` (행정구역별 인구/가구 통계)
 - 좌표 확보용: `boundary/hadmarea.geojson` (행정구역 경계 폴리곤 — centroid 계산해서 `REGION.latitude/longitude`에 저장, 1회성 시딩용. 지도 마커 표시를 위해 실시간 상권정보 호출 대신 이 방식으로 확정 — 3주차 검증 중 발견)
-    - ⚠️ **응답 좌표는 WGS84가 아니라 투영좌표계(EPSG:5179, 중부원점)** — centroid는 직접 계산(Shoelace), 좌표계 변환만 proj4j로 EPSG:5179→WGS84 처리할 것. 변환 안 하면 Kakao Map에 마커가 잘못된 위치에 찍힘 (3주차 REST 컨트롤러 구현 중 추가로 발견·해결, 반드시 지킬 것)
+  - ⚠️ **응답 좌표는 WGS84가 아니라 투영좌표계(EPSG:5179, 중부원점)** — centroid는 직접 계산(Shoelace), 좌표계 변환만 proj4j로 EPSG:5179→WGS84 처리할 것. 변환 안 하면 Kakao Map에 마커가 잘못된 위치에 찍힘 (3주차 REST 컨트롤러 구현 중 추가로 발견·해결, 반드시 지킬 것)
 - 역할: 잠재 고객 규모/가구 구조 산출, 지역 좌표 확보
 
 ### 2. 소상공인시장진흥공단 상가(상권)정보
-
 - Base URL: `https://apis.data.go.kr/B553077/api/open/sdsc2`
 - 인증: 공공데이터포털 발급 `serviceKey`
 - 핵심 오퍼레이션: `storeListInDong` (행정구역 단위 업소 조회, `divId="adongCd"`+`key`)
@@ -83,7 +83,6 @@
 ## DB 스키마 (핵심 엔티티, 3주차 실제 마이그레이션 반영)
 
 > ⚠️ 새 마이그레이션을 추가하기 전에 반드시 `DB_스키마_변경_관리_가이드.md`의 원칙(적용된 마이그레이션 수정 금지, nullable 우선, 체크리스트)을 먼저 확인할 것.
-> 
 
 ```
 REGION(regionCode PK, regionName, level, latitude, longitude)  ← latitude/longitude는 V6 추가 예정(아직 미구현)
@@ -99,37 +98,51 @@ SCORE_CACHE(regionCode FK, industryCode FK, totalScore, populationScore, househo
 탐색 흐름: **업종 선택(필수) → 랭킹 리스트 + 지도(양방향 연동) → 상세 패널**
 
 상세 패널은 항상 다음을 함께 표시:
-
 - 종합 점수 (크게)
-- 브레이크다운 ①인구 규모 ②가구 구조 ③경쟁 밀집도 (각 항목의 원자료 값도 함께 노출 — "왜 이 점수인가"를 사용자가 확인할 수 있어야 함)
+- 브레이크다운 ①인구 규모 ②가구 구조 ③경쟁 여유도(구 "경쟁 밀집도") (각 항목의 원자료 값도 함께 노출 — "왜 이 점수인가"를 사용자가 확인할 수 있어야 함)
 
-## 가중치 산출 방법 (확정) — 수요/공급 2축 하이브리드 AHP
+## 창업 매력도의 정의 (2026-08 재검토·확정)
 
-3개 지표(인구 규모/가구 구조/경쟁 밀집도)를 한 번에 비교하지 않고 2단계 계층으로 나눔:
+**"이 지역에서 이 업종이 인기 있는가"가 아니라, "수요는 충분히 크면서 그 수요 대비 경쟁이 상대적으로 여유 있는가"를 나타내는 점수다.** "핫플레이스"가 아니라 "수요는 있는데 아직 덜 뚫린 곳"을 찾아주는 게 목적.
+
+**`densityScore` 계산 방식 변경**: 기존엔 동일 업종 업소 개수를 그대로 정규화해 "업소가 많을수록 점수가 높아지는" 방향이었음(A방식). 2026-08 재검토로 **인구 대비 업소 밀도를 계산한 뒤 역정규화**하는 방식(B방식)으로 변경 — 이제 "경쟁이 적을수록(여유 있을수록) 점수가 높아짐". API 필드명(`densityScore`)은 유지, 화면 라벨만 "경쟁 여유도"로 표기. 인구=5만/업소=30개 지역과 인구=5천/업소=30개 지역을 기존 방식은 동일하게 취급했으나, 새 방식은 후자를 훨씬 과열된 것으로 정확히 구분함.
+
+## 가중치 산출 방법 (v2 확정, 2026-08 재산출) — 수요/경쟁여유도 2축 하이브리드 AHP
+
+> v1(최초 산출)은 "경쟁 밀집도가 단순 업소 개수 기반"이던 시절의 근거였음. 정의가 "경쟁 여유도"로 바뀌며 최상위 비교(수요 vs 공급)의 근거 자체가 무효화되어 재산출함. 전체 배경은 `창업매력도_정의_재검토_기록.md` 참고.
+
+3개 지표(인구 규모/가구 구조/경쟁 여유도)를 2단계 계층으로 비교:
 
 ```
         [종합 점수]
         /         \
-   [수요]          [공급]
-   /     \            |
-[인구규모] [가구구조]  [경쟁밀집도]
+   [수요]        [경쟁여유도]
+   /     \
+[인구규모] [가구구조]
 ```
 
-1. 1단계 쌍대비교: 수요 vs 공급 중요도
-2. 2단계 쌍대비교: 수요 내부에서 인구 규모 vs 가구 구조 중요도 (공급은 항목 1개뿐이라 비교 불필요)
-3. 최종 가중치 = 수요 가중치 × 하위 비율 (인구 규모/가구 구조), 공급 가중치 그대로(경쟁 밀집도)
-4. 실제 아는 지역 데이터로 점수를 뽑아 상식과 맞는지 검증 → 안 맞으면 비교값 재조정
+1. 1단계 쌍대비교: 수요 vs 경쟁여유도 중요도
+2. 2단계 쌍대비교: 수요 내부에서 인구 규모 vs 가구 구조 중요도
+3. 최종 가중치 = 수요 가중치 × 하위 비율(인구 규모/가구 구조), 경쟁여유도 가중치 그대로
 
-### 확정 가중치 수치
+### 확정 가중치 수치 (v2)
 
 | 비교 | Saaty 값 | 근거 |
-| --- | --- | --- |
-| 수요 vs 공급 | 2 (수요 우위) | 수요가 창업 성패의 기초 지표지만, 인구 많은 곳은 경쟁도 몰리는 경향이 있어 공급에도 1/3 비중 유지 |
-| 인구 규모 vs 가구 구조 | 3 (인구규모 우위) | 인구 규모는 시장 절대 크기(1차 지표), 가구 구조는 세부 보정(2차 지표) |
+|---|---|---|
+| 수요 vs 경쟁여유도 | **1(동등)** | 경쟁여유도가 이미 인구 대비로 계산돼 수요 정보를 내부에 포함하므로, 한쪽에 임의로 비중을 더 주려면 데이터 근거(매출 상관관계 등)가 필요한데 확보 불가 — 근거 없는 편향을 주지 않는 게 가장 방어 가능한 선택 |
+| 인구 규모 vs 가구 구조 | 3(인구규모 우위, **변경 없음**) | 인구 규모는 시장 절대 크기(1차 지표), 가구 구조는 세부 보정(2차 지표) — 경쟁 지표 재정의와 무관 |
 
-**최종 가중치**: 인구 규모(`populationScore`) **0.50** / 가구 구조(`householdScore`) **0.17** / 경쟁 밀집도(`densityScore`) **0.33**
+| 지표 | v1(폐기) | v2(확정) |
+|---|---|---|
+| 인구 규모(`populationScore`) | 0.50 | **0.375** |
+| 가구 구조(`householdScore`) | 0.17 | **0.125** |
+| 경쟁 여유도(`densityScore`) | 0.33 | **0.5** |
 
-**구현 시 반드시 지킬 것**: 이 값을 숫자로 코드에 하드코딩하지 말고 `ScoreWeightConfig` 테이블에 시딩할 것 (기존 임시 균등값 1/3씩 교체). 계산 과정은 API 명세서 5.2.2절 참고.
+**구현 시 반드시 지킬 것**:
+1. `densityScore` 계산 로직을 "인구 대비 업소 밀도 역정규화" 방식으로 수정 (인구 0인 지역 등 분모 0 예외 처리 필요)
+2. 가중치 숫자를 코드에 하드코딩하지 말고 `ScoreWeightConfig`에 v1→v2로 교체 시딩
+3. **가중치·계산 로직 변경 후 `SCORE_CACHE` 전체 재계산 필수** — 안 하면 화면에 낡은 v1 기준 점수가 계속 보임
+4. 계산 과정은 API 명세서 5.2.2절, 재검토 전체 배경은 `창업매력도_정의_재검토_기록.md` 참고
 
 ## 확정 REST API 응답 계약 (3주차 실제 구현·curl 검증 완료)
 
@@ -138,13 +151,14 @@ SCORE_CACHE(regionCode FK, industryCode FK, totalScore, populationScore, househo
 - `GET /api/v1/industries` → `[{ industryCode, industryName }]` (level 필드 없음)
 - `GET /api/v1/scores/ranking?industryCode=` → `[{ regionCode, regionName, totalScore, populationScore, householdScore, densityScore, latitude, longitude, percentileRank, attractivenessTier }]` (flat, `householdScore`는 NOT NULL, `latitude`/`longitude`는 V6 시딩 완료 지역만 값 있음). 데이터 없으면 빈 배열을 200으로 반환(에러 아님).
 - `GET /api/v1/scores/detail?regionCode=&industryCode=` → `{ regionName, industryName, totalScore, populationStat: {...}, competitionStat: {...} }` (regionName/industryName은 최상위 flat). **`populationStat`/`competitionStat`은 객체 전체가 null일 수 있음** — 프론트는 반드시 옵셔널 체이닝으로 처리. `populationStat.householdCount`/`avgHouseholdSize`는 여전히 nullable(V2가 NOT NULL 승격 안 함).
+  - `competitionStat.storeCountPerCapita`(2026-08 추가): 총인구 1만명당 동일 업종 업소 수(소수 첫째자리, 예: `50.4`). `storeCount`/`snapshotDate`는 그대로 유지, 추가 필드임. 절대 업소 수만 보면 `densityScore`(경쟁 여유도) 등급과 안 맞아 보이는 문제(예: "업소 47개"인데 "여유 있음")를 보완하기 위해 추가 — densityScore 계산에 이미 쓰는 인구 대비 밀도를 그대로 노출한 것. 인구 데이터가 없거나 0인 지역은 `null`(`populationStat`이 null인 경우와 동일한 원칙).
 
 ## 점수 해석 기준 (확정) — 퍼센타일 밴드
 
 종합 점수(min-max 정규화)는 데이터셋 크기가 바뀔 때마다 절대 숫자가 흔들림(실제로 매핑 이슈 해결 전/후 역삼1동 45.69→73.65로 변동 — 동네가 좋아진 게 아니라 비교 모집단이 커진 것). **고정된 절대 점수 기준("80점 이상") 대신 같은 업종 내 상대 순위(퍼센타일) 기반 등급을 사용한다.**
 
 | 퍼센타일 구간(같은 업종 내) | 등급 라벨 |
-| --- | --- |
+|---|---|
 | 상위 10% 이내 | 매력적인 입지(`ATTRACTIVE`) |
 | 상위 10~30% | 괜찮은 입지(`GOOD`) |
 | 상위 30~70% | 평균적인 입지(`AVERAGE`) |
@@ -167,27 +181,27 @@ SCORE_CACHE(regionCode FK, industryCode FK, totalScore, populationScore, househo
 계층별로 아래 지점에서 로그를 남길 것. 레벨 기준: **ERROR**=즉시 대응 필요(인증 실패, DB 커넥션 실패), **WARN**=예상된 예외 케이스(N/A 값, 코드 매핑 실패 등 "아직 결정되지 않은 사항"과 연결된 케이스), **INFO**=정상 흐름 이정표, **DEBUG**=개발 중에만 활성화하는 상세 추적.
 
 | 계층 | 로그 위치 | 레벨 | 내용 |
-| --- | --- | --- | --- |
+|---|---|---|---|
 | 외부 API 호출 | AccessToken 발급 | INFO/ERROR | 발급 성공 시각 / 실패 응답 코드 |
-|  | API 요청 시작 | DEBUG | 요청 URL, 파라미터(`adm_cd`, `divId` 등) |
-|  | API 응답 수신 | INFO | HTTP 상태코드, 응답 건수 |
-|  | API 응답 실패 | ERROR | `errCd`/`errMsg`(SGIS), `resultCode`(상권정보) 원문 |
-|  | 페이징 처리 중 | DEBUG | 현재 페이지 번호, 누적 수집 건수 |
+| | API 요청 시작 | DEBUG | 요청 URL, 파라미터(`adm_cd`, `divId` 등) |
+| | API 응답 수신 | INFO | HTTP 상태코드, 응답 건수 |
+| | API 응답 실패 | ERROR | `errCd`/`errMsg`(SGIS), `resultCode`(상권정보) 원문 |
+| | 페이징 처리 중 | DEBUG | 현재 페이지 번호, 누적 수집 건수 |
 | 배치 스케줄러 | 배치 시작/종료 | INFO | 시작/종료 시각, 총 소요시간 |
-|  | 수집 결과 요약 | INFO | 수집 건수 vs DB 저장 건수 |
-|  | 배치 실패 | ERROR | 예외 스택트레이스, 실패 시점 |
+| | 수집 결과 요약 | INFO | 수집 건수 vs DB 저장 건수 |
+| | 배치 실패 | ERROR | 예외 스택트레이스, 실패 시점 |
 | 정규화/점수 계산 | 행정구역 코드 매핑 | WARN | 매핑 실패한 `adm_cd`/`adongCd` 값 |
-|  | N/A(비공개) 값 처리 | WARN | 어떤 지역·필드가 N/A였는지 |
-|  | 가중치 계산 결과 | DEBUG | 지역×업종 조합, 브레이크다운별 점수, 종합 점수 |
-|  | 정규화 이상치 | WARN | min-max/z-score 계산 중 분모 0 등 예외 |
+| | N/A(비공개) 값 처리 | WARN | 어떤 지역·필드가 N/A였는지 |
+| | 가중치 계산 결과 | DEBUG | 지역×업종 조합, 브레이크다운별 점수, 종합 점수 |
+| | 정규화 이상치 | WARN | min-max/z-score 계산 중 분모 0 등 예외 |
 | DB 접근 | 쿼리/커넥션 실패 | ERROR | 실패한 쿼리, 커넥션 풀 상태 |
-|  | 트랜잭션 롤백 | WARN | 롤백 사유 |
+| | 트랜잭션 롤백 | WARN | 롤백 사유 |
 | API(Controller) | 요청 수신 | INFO | 엔드포인트, 요청 파라미터 |
-|  | 응답 처리 시간 | DEBUG | 처리 소요시간(ms) |
-|  | `@ControllerAdvice` 예외 처리 | ERROR | 예외 종류, 발생 위치(서비스 메서드) |
+| | 응답 처리 시간 | DEBUG | 처리 소요시간(ms) |
+| | `@ControllerAdvice` 예외 처리 | ERROR | 예외 종류, 발생 위치(서비스 메서드) |
 | 프론트(React) | TanStack Query `onError` | error | 실패한 API 엔드포인트, 응답 코드 |
-|  | Kakao Map 렌더링 실패 | warn | 지도 초기화 실패 사유 |
-|  | 상세 패널 데이터 누락 | warn | 브레이크다운 필드 중 누락된 값 |
+| | Kakao Map 렌더링 실패 | warn | 지도 초기화 실패 사유 |
+| | 상세 패널 데이터 누락 | warn | 브레이크다운 필드 중 누락된 값 |
 
 ## 폴더 구조
 
@@ -223,7 +237,7 @@ project/
 ## 1개월 마일스톤
 
 | 주차 | 목표 |
-| --- | --- |
+|---|---|
 | 1주차 | Spring Initializr 셋업, API 인증키 발급, SGIS/상권정보 클라이언트 구현 |
 | 2주차 | 배치로 원자료 DB 적재, 행정구역 코드 매핑 검증, 정규화·가중치 로직 구현 |
 | 3주차 | REST 컨트롤러 구현, 프론트 기본 골격(랭킹+지도) 연동 |

@@ -35,13 +35,15 @@ public class ScoreCache {
     @JoinColumn(name = "industry_code", nullable = false)
     private IndustryCategory industry;
 
-    @Column(name = "total_score", nullable = false)
+    // population < 100(B-2 최소 인구 기준)인 지역x업종 조합은 densityScore를
+    // 계산하지 않고, 그 값에 의존하는 totalScore도 함께 null로 둔다 - V8 마이그레이션.
+    @Column(name = "total_score")
     private BigDecimal totalScore;
 
     @Column(name = "population_score", nullable = false)
     private BigDecimal populationScore;
 
-    @Column(name = "density_score", nullable = false)
+    @Column(name = "density_score")
     private BigDecimal densityScore;
 
     @Column(name = "household_score", nullable = false)
