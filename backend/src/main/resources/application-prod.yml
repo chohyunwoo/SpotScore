@@ -15,7 +15,7 @@ spring:
 
 spotscore:
   sgis:
-    base-url: https://sgisapi.kostat.go.kr/OpenAPI3
+    base-url: https://sgisapi.mods.go.kr/OpenAPI3
     consumer-key: ${SGIS_CONSUMER_KEY}
     consumer-secret: ${SGIS_CONSUMER_SECRET}
     stat-year: ${SGIS_STAT_YEAR:}

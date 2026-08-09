@@ -18,9 +18,8 @@ public class WebClientConfig {
 
     @Bean
     public WebClient sgisWebClient(SgisProperties properties) {
-        // sgisapi.kostat.go.kr는 실제로 sgisapi.mods.go.kr로 302 리다이렉트된다
-        // (도메인 이관 확인됨). Reactor Netty 기본 설정은 리다이렉트를 따라가지 않으므로
-        // 명시적으로 켜야 한다.
+        // base-url이 최종 도메인(sgisapi.mods.go.kr)을 직접 가리키므로 이 리다이렉트는
+        // 정상 경로에서는 타지 않는다 - kostat.go.kr 도메인이 다시 쓰이는 경우를 대비한 안전장치.
         HttpClient httpClient = HttpClient.create().followRedirect(true);
         return WebClient.builder()
                 .baseUrl(properties.baseUrl())

@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Mono;
 
 import java.util.concurrent.atomic.AtomicReference;
@@ -60,7 +61,12 @@ public class SgisAuthService {
                     return Mono.just(token);
                 })
                 .onErrorMap(ex -> !(ex instanceof ExternalApiException), ex -> {
-                    log.error("SGIS AccessToken 발급 중 예외 발생", ex);
+                    if (ex instanceof WebClientResponseException wcre) {
+                        log.error("SGIS AccessToken 발급 중 예외 발생 - status: {}, body: {}, headers: {}",
+                                wcre.getStatusCode(), wcre.getResponseBodyAsString(), wcre.getHeaders());
+                    } else {
+                        log.error("SGIS AccessToken 발급 중 예외 발생", ex);
+                    }
                     return new ExternalApiException("SGIS", "AccessToken 발급 중 예외: " + ex.getMessage(), ex);
                 });
     }
