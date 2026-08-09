@@ -82,6 +82,8 @@ declare global {
       open(map: Map, marker?: Marker): void;
       close(): void;
       setContent(content: string | HTMLElement): void;
+      /** marker 없이 클러스터 등 임의 좌표에 InfoWindow를 띄울 때 사용(getClusterMarker 타입 불확실성 회피). */
+      setPosition(latlng: LatLng): void;
     }
 
     interface MarkerClustererOptions {
@@ -92,6 +94,8 @@ declare global {
       disableClickZoom?: boolean;
       /** 클러스터 개수 구간별 스타일(기본값은 카카오 기본 노랑/초록이라 디자인 톤과 안 맞아 오버라이드). */
       styles?: Partial<CSSStyleDeclaration>[];
+      /** styles와 같은 길이의 구간 경계값 - 예: [10, 50, 100]이면 4단계(10미만/10~49/50~99/100+)로 나뉜다. */
+      calculator?: number[];
     }
 
     /**
@@ -106,8 +110,16 @@ declare global {
       clear(): void;
     }
 
+    /** MarkerClusterer의 'clustered'/'clusterover'/'clusterout'/'clusterclick' 이벤트 콜백 인자. */
+    class Cluster {
+      getSize(): number;
+      getCenter(): LatLng;
+      getMarkers(): Marker[];
+    }
+
     namespace event {
       function addListener(target: Marker | Map, type: string, handler: () => void): void;
+      function addListener(target: MarkerClusterer, type: string, handler: (cluster: Cluster) => void): void;
     }
 
     /**

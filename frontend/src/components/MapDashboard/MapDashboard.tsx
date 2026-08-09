@@ -278,8 +278,17 @@ function hexToRgba(hex: string, alpha: number): string {
 }
 
 /**
+ * 클러스터 배지 개수 구간 경계 - styles 배열(4단계)과 반드시 같은 순서로 맞춘다.
+ * 10개 미만 / 10~49개 / 50~99개 / 100개 이상, 총 4단계로 "가게 개수" 양적 차이를
+ * 크기·색 농도로 함께 드러낸다(라벨 없이 숫자만 떠 있어 업종 개수인지 가게 개수인지
+ * 헷갈렸던 피드백 반영 - 클러스터 hover/click 시 뜨는 툴팁(buildClusterTooltipContent)이
+ * "가게 N개"로 명확히 밝혀준다).
+ */
+const CLUSTER_SIZE_TIERS = [10, 50, 100];
+
+/**
  * MarkerClusterer 기본 스타일은 카카오 기본값(노랑/초록 신호등식)이라 "강조색은
- * accent 하나만" 원칙에 맞지 않아 오버라이드 - 개수 구간(기본 10/100 경계)에 따라
+ * accent 하나만" 원칙에 맞지 않아 오버라이드 - 개수 구간(CLUSTER_SIZE_TIERS)에 따라
  * accent를 크기/불투명도만 다르게 써서 하나의 색 스케일로만 표현한다.
  */
 function buildClustererStyles(theme: AppTheme): Partial<CSSStyleDeclaration>[] {
@@ -290,9 +299,10 @@ function buildClustererStyles(theme: AppTheme): Partial<CSSStyleDeclaration>[] {
     fontWeight: String(theme.typography.weight.bold),
   };
   return [
-    { ...base, width: '32px', height: '32px', lineHeight: '32px', fontSize: '12px', borderRadius: '16px', background: hexToRgba(theme.colors.accent, 0.7) },
-    { ...base, width: '40px', height: '40px', lineHeight: '40px', fontSize: '13px', borderRadius: '20px', background: hexToRgba(theme.colors.accent, 0.85) },
-    { ...base, width: '48px', height: '48px', lineHeight: '48px', fontSize: '14px', borderRadius: '24px', background: hexToRgba(theme.colors.accent, 1) },
+    { ...base, width: '28px', height: '28px', lineHeight: '28px', fontSize: '11px', borderRadius: '14px', background: hexToRgba(theme.colors.accent, 0.45) },
+    { ...base, width: '36px', height: '36px', lineHeight: '36px', fontSize: '12px', borderRadius: '18px', background: hexToRgba(theme.colors.accent, 0.65) },
+    { ...base, width: '44px', height: '44px', lineHeight: '44px', fontSize: '13px', borderRadius: '22px', background: hexToRgba(theme.colors.accent, 0.85) },
+    { ...base, width: '52px', height: '52px', lineHeight: '52px', fontSize: '14px', borderRadius: '26px', background: hexToRgba(theme.colors.accent, 1) },
   ];
 }
 
@@ -300,6 +310,24 @@ function buildClustererStyles(theme: AppTheme): Partial<CSSStyleDeclaration>[] {
 function buildStoreInfoContent(bizesNm: string, theme: AppTheme): HTMLDivElement {
   const el = document.createElement('div');
   el.textContent = bizesNm;
+  el.style.padding = '3px 8px';
+  el.style.fontFamily = theme.typography.fontFamily;
+  el.style.fontSize = '11px';
+  el.style.fontWeight = String(theme.typography.weight.medium);
+  el.style.background = theme.colors.textPrimary;
+  el.style.color = theme.colors.onAccent;
+  el.style.borderRadius = theme.radius.sm;
+  el.style.whiteSpace = 'nowrap';
+  return el;
+}
+
+/**
+ * 클러스터 배지 hover/click 시 뜨는 툴팁 - "가게 47개"처럼 숫자가 무엇을 세는
+ * 값인지 명시한다. 상세 패널의 "가게 수" 표기와 같은 단어("가게")로 통일.
+ */
+function buildClusterTooltipContent(count: number, theme: AppTheme): HTMLDivElement {
+  const el = document.createElement('div');
+  el.textContent = `가게 ${count.toLocaleString()}개`;
   el.style.padding = '3px 8px';
   el.style.fontFamily = theme.typography.fontFamily;
   el.style.fontSize = '11px';
@@ -326,6 +354,7 @@ export function MapDashboard() {
   const storeMarkersRef = useRef<kakao.maps.Marker[]>([]);
   const storeClustererRef = useRef<kakao.maps.MarkerClusterer | null>(null);
   const storeInfoWindowRef = useRef<kakao.maps.InfoWindow | null>(null);
+  const clusterInfoWindowRef = useRef<kakao.maps.InfoWindow | null>(null);
   const pinnedStoreIdRef = useRef<string | null>(null);
   const boundsFittedForIndustryRef = useRef<string | null>(null);
 
@@ -390,6 +419,7 @@ export function MapDashboard() {
     storeClustererRef.current?.clear();
     storeMarkersRef.current = [];
     storeInfoWindowRef.current?.close();
+    clusterInfoWindowRef.current?.close();
     pinnedStoreIdRef.current = null;
 
     if (!regionCode || !industryCode) {
@@ -441,12 +471,37 @@ export function MapDashboard() {
     // MarkerClusterer가 map에 표시/클러스터링을 대신 맡으므로 개별 marker.setMap
     // 호출은 하지 않는다(둘 다 하면 클러스터 밖에 중복으로 찍힘).
     if (!storeClustererRef.current) {
-      storeClustererRef.current = new window.kakao.maps.MarkerClusterer({
+      const clusterer = new window.kakao.maps.MarkerClusterer({
         map,
         averageCenter: true,
         minLevel: 3,
         styles: buildClustererStyles(theme),
+        calculator: CLUSTER_SIZE_TIERS,
       });
+
+      if (!clusterInfoWindowRef.current) {
+        clusterInfoWindowRef.current = new window.kakao.maps.InfoWindow({ removable: false });
+      }
+      const clusterInfoWindow = clusterInfoWindowRef.current;
+
+      // 라벨 없는 숫자 배지만으로는 "가게 개수"인지 알기 어렵다는 피드백 반영 -
+      // hover든 click이든 항상 "가게 N개" 툴팁으로 명확히 밝힌다(클릭은 기본
+      // 줌인 동작도 그대로 유지 - disableClickZoom을 켜지 않았으므로 방해 없음).
+      window.kakao.maps.event.addListener(clusterer, 'clusterover', (cluster) => {
+        clusterInfoWindow.setContent(buildClusterTooltipContent(cluster.getSize(), theme));
+        clusterInfoWindow.setPosition(cluster.getCenter());
+        clusterInfoWindow.open(map);
+      });
+      window.kakao.maps.event.addListener(clusterer, 'clusterout', () => {
+        clusterInfoWindow.close();
+      });
+      window.kakao.maps.event.addListener(clusterer, 'clusterclick', (cluster) => {
+        clusterInfoWindow.setContent(buildClusterTooltipContent(cluster.getSize(), theme));
+        clusterInfoWindow.setPosition(cluster.getCenter());
+        clusterInfoWindow.open(map);
+      });
+
+      storeClustererRef.current = clusterer;
     }
     storeClustererRef.current.addMarkers(markers);
     storeMarkersRef.current = markers;

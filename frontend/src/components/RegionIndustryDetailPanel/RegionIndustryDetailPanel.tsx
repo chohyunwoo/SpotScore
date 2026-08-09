@@ -417,7 +417,7 @@ export function RegionIndustryDetailPanel() {
 
         <Card>
           <CardTitle>공급</CardTitle>
-          <CardSubtitle>경쟁 여유도 (소상공인시장진흥공단 상가업소 기반)</CardSubtitle>
+          <CardSubtitle>경쟁 여유도 (소상공인시장진흥공단 상가정보 기반)</CardSubtitle>
           {detail.densityScore !== null ? (
             <ChartWrapper>
               <ResponsiveContainer width="100%" height="100%">
@@ -440,16 +440,31 @@ export function RegionIndustryDetailPanel() {
               (인구 표본 100명 미만이라 산출하지 않음)
             </InsufficientChartPlaceholder>
           )}
+          {/*
+            "동일 업종 업소 117개 (1만명당 22.6)"처럼 한 줄에 붙여 쓰면 어색한
+            줄바꿈 지점에서 "업종"과 "업소"가 붙어 보여 오독 위험이 있었다(피드백) -
+            "무엇을 세는 값인지"를 레이블로 분리: 선택된 업종은 업종 행, 그 업종의
+            가게 개수는 별도 가게 수 행으로 나눈다. 지도 클러스터 툴팁과 동일하게
+            "가게"라는 단어로 통일(업소/매장/점포 혼용 금지).
+          */}
           <RawValueList>
             <RawValueRow>
-              <dt>동일 업종 업소 수</dt>
+              <dt>업종</dt>
+              <dd>{detail.industryName} (선택됨)</dd>
+            </RawValueRow>
+            <RawValueRow>
+              <dt>가게 수</dt>
               <dd>
                 {detail.competitionStat != null
-                  ? `${detail.competitionStat.storeCount.toLocaleString()}개${
-                      detail.competitionStat.storeCountPerCapita != null
-                        ? ` (1만명당 ${detail.competitionStat.storeCountPerCapita.toFixed(1)}개)`
-                        : ''
-                    }`
+                  ? `${detail.competitionStat.storeCount.toLocaleString()}개`
+                  : NA}
+              </dd>
+            </RawValueRow>
+            <RawValueRow>
+              <dt>인구 1만명당 가게 수</dt>
+              <dd>
+                {detail.competitionStat?.storeCountPerCapita != null
+                  ? `${detail.competitionStat.storeCountPerCapita.toFixed(1)}개`
                   : NA}
               </dd>
             </RawValueRow>
