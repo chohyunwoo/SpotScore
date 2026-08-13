@@ -31,6 +31,12 @@ spotscore:
   store-zone:
     base-url: https://apis.data.go.kr/B553077/api/open/sdsc2
     service-key: ${STORE_ZONE_SERVICE_KEY:}
+  kosis:
+    base-url: https://kosis.kr/openapi
+    api-key: ${KOSIS_API_KEY:}
+    # 2026-08-13 라이브 호출로 확인된 DT_1B04005N(행정구역(읍면동)별/5세별 주민등록인구)
+    # 최신 발행 연도 - SGIS와 마찬가지로 발행 시차가 있어 팀이 주기적으로 재확인할 것.
+    stat-year: ${KOSIS_STAT_YEAR:2024}
   batch:
     # 강남구 역삼1동/역삼2동 - 2026-08-04에 실제 SGIS/상권정보 라이브 호출로 검증된 값
     # (RegionCodeMappingValidator가 매 배치 실행마다 다시 대조하므로 값이 바뀌면 자동으로

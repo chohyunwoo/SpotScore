@@ -28,6 +28,17 @@ public class WebClientConfig {
     }
 
     @Bean
+    public WebClient kosisWebClient(KosisProperties properties) {
+        // KOSIS apiKey는 StoreZone의 serviceKey와 달리 미리 인코딩된 값이 아니라 원문
+        // base64 값('=' 패딩 포함)이 그대로 내려온다(.env 확인) - 기본 인코딩 모드로
+        // '=' -> '%3D' 1회 인코딩되는 것이 실제로 맞는 동작이다(라이브 호출로 검증 완료,
+        // StoreZoneProperties처럼 인코딩을 끄면 오히려 실패한다).
+        return WebClient.builder()
+                .baseUrl(properties.baseUrl())
+                .build();
+    }
+
+    @Bean
     public WebClient storeZoneWebClient(StoreZoneProperties properties) {
         // 공공데이터포털 serviceKey는 발급 시점에 이미 URL-인코딩된 값으로 내려온다
         // (예: '=' -> '%3D'). 기본 인코딩 모드(TEMPLATE_AND_VALUES)를 쓰면 그 안의 '%'가

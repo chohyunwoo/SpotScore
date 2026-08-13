@@ -22,6 +22,10 @@ spotscore:
   store-zone:
     base-url: https://apis.data.go.kr/B553077/api/open/sdsc2
     service-key: ${STORE_ZONE_SERVICE_KEY}
+  kosis:
+    base-url: https://kosis.kr/openapi
+    api-key: ${KOSIS_API_KEY}
+    stat-year: ${KOSIS_STAT_YEAR:}
   cors:
     # 배포된 프론트 도메인으로 반드시 명시 설정할 것 - 비우면 CORS 전체 비활성(WebConfig 참고)
     allowed-origins: ${SPOTSCORE_CORS_ALLOWED_ORIGINS:}

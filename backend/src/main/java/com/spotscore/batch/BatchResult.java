@@ -9,6 +9,7 @@ public record BatchResult(
         int regionsSkipped,
         int populationRowsSaved,
         int storeCountRowsSaved,
+        int ageStatRowsSaved,
         long elapsedMillis
 ) {
 }

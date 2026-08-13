@@ -11,6 +11,7 @@ import com.spotscore.repository.PopulationStatRepository;
 import com.spotscore.repository.RankingProjection;
 import com.spotscore.repository.ScoreCacheRepository;
 import com.spotscore.repository.StoreCountRepository;
+import com.spotscore.scoring.AgeScoreService;
 import com.spotscore.scoring.AttractivenessTier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,13 +33,16 @@ public class ScoreQueryService {
     private final ScoreCacheRepository scoreCacheRepository;
     private final PopulationStatRepository populationStatRepository;
     private final StoreCountRepository storeCountRepository;
+    private final AgeScoreService ageScoreService;
 
     public ScoreQueryService(ScoreCacheRepository scoreCacheRepository,
                               PopulationStatRepository populationStatRepository,
-                              StoreCountRepository storeCountRepository) {
+                              StoreCountRepository storeCountRepository,
+                              AgeScoreService ageScoreService) {
         this.scoreCacheRepository = scoreCacheRepository;
         this.populationStatRepository = populationStatRepository;
         this.storeCountRepository = storeCountRepository;
+        this.ageScoreService = ageScoreService;
     }
 
     @Transactional(readOnly = true)
@@ -85,6 +89,10 @@ public class ScoreQueryService {
                     regionCode, industryCode);
         }
 
-        return ScoreDetailResponse.of(scoreCache, populationStat, storeCount);
+        Long sgisPopulation = populationStat == null ? null : populationStat.getTotalPopulation();
+        Integer year = populationStat == null ? null : populationStat.getYear();
+        ScoreDetailResponse.AgeStatDetail ageStat = ageScoreService.computeAgeStat(region, industryCode, sgisPopulation, year);
+
+        return ScoreDetailResponse.of(scoreCache, populationStat, storeCount, ageStat);
     }
 }

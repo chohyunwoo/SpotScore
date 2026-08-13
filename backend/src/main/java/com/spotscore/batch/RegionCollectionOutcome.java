@@ -1,4 +1,4 @@
 package com.spotscore.batch;
 
-record RegionCollectionOutcome(int populationRowsSaved, int storeCountRowsSaved) {
+record RegionCollectionOutcome(int populationRowsSaved, int storeCountRowsSaved, int ageStatRowsSaved) {
 }

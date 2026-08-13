@@ -36,3 +36,9 @@ spotscore:
     # industry_category.featured를 갱신한다. 집계가 바뀌면 이 값만 바꾸면 된다
     # (코드에 업종 코드를 나열하지 않는다 - CLAUDE.md 확장성 원칙 2).
     featured-codes: ${SPOTSCORE_FEATURED_INDUSTRY_CODES:I201,S207,I210,G209,L102,M107,P106,I212,M105,G204,Q102,I211,M112,P105,G205,G215,M109,M103,R104,I101,R103,I203,M104,I204,M113,G208,G213,N102,P107,I202}
+    age-direction:
+      # 대분류 접두어 기준 ageScore 방향성(CLAUDE.md 연령 구성 지표 섹션) - I2(외식)/
+      # R1(스포츠·오락)/P1(교육)은 20~39세 비중이 높을수록 유리(POSITIVE), Q1(보건의료)은
+      # 불리(NEGATIVE), 어느 접두어에도 없으면 NEUTRAL(ageScore 계산 안 함, 가중치 제외).
+      positive-prefixes: ${SPOTSCORE_AGE_DIRECTION_POSITIVE_PREFIXES:I2,R1,P1}
+      negative-prefixes: ${SPOTSCORE_AGE_DIRECTION_NEGATIVE_PREFIXES:Q1}

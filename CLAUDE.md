@@ -43,7 +43,7 @@
 - 인증: `auth/authentication.json`에 consumer_key/secret → accessToken 발급 (만료 있음, 재발급 로직 필요)
 - 핵심 엔드포인트: `stats/population.json` (행정구역별 인구/가구 통계)
 - 좌표 확보용: `boundary/hadmarea.geojson` (행정구역 경계 폴리곤 — centroid 계산해서 `REGION.latitude/longitude`에 저장, 1회성 시딩용. 지도 마커 표시를 위해 실시간 상권정보 호출 대신 이 방식으로 확정 — 3주차 검증 중 발견)
-  - ⚠️ **응답 좌표는 WGS84가 아니라 투영좌표계(EPSG:5179, 중부원점)** — centroid는 직접 계산(Shoelace), 좌표계 변환만 proj4j로 EPSG:5179→WGS84 처리할 것. 변환 안 하면 Kakao Map에 마커가 잘못된 위치에 찍힘 (3주차 REST 컨트롤러 구현 중 추가로 발견·해결, 반드시 지킬 것)
+    - ⚠️ **응답 좌표는 WGS84가 아니라 투영좌표계(EPSG:5179, 중부원점)** — centroid는 직접 계산(Shoelace), 좌표계 변환만 proj4j로 EPSG:5179→WGS84 처리할 것. 변환 안 하면 Kakao Map에 마커가 잘못된 위치에 찍힘 (3주차 REST 컨트롤러 구현 중 추가로 발견·해결, 반드시 지킬 것)
 - 역할: 잠재 고객 규모/가구 구조 산출, 지역 좌표 확보
 
 ### 2. 소상공인시장진흥공단 상가(상권)정보
@@ -105,7 +105,9 @@ SCORE_CACHE(regionCode FK, industryCode FK, totalScore, populationScore, househo
 
 **"이 지역에서 이 업종이 인기 있는가"가 아니라, "수요는 충분히 크면서 그 수요 대비 경쟁이 상대적으로 여유 있는가"를 나타내는 점수다.** "핫플레이스"가 아니라 "수요는 있는데 아직 덜 뚫린 곳"을 찾아주는 게 목적.
 
-**`densityScore` 계산 방식 변경**: 기존엔 동일 업종 업소 개수를 그대로 정규화해 "업소가 많을수록 점수가 높아지는" 방향이었음(A방식). 2026-08 재검토로 **인구 대비 업소 밀도를 계산한 뒤 역정규화**하는 방식(B방식)으로 변경 — 이제 "경쟁이 적을수록(여유 있을수록) 점수가 높아짐". API 필드명(`densityScore`)은 유지, 화면 라벨만 "경쟁 여유도"로 표기. 인구=5만/업소=30개 지역과 인구=5천/업소=30개 지역을 기존 방식은 동일하게 취급했으나, 새 방식은 후자를 훨씬 과열된 것으로 정확히 구분함.
+**`densityScore` 계산 방식 변경**: 기존엔 동일 업종 업소 개수를 그대로 정규화해 "업소가 많을수록 점수가 높아지는" 방향이었음(A방식). 2026-08 재검토로 **인구 대비 업소 밀도** 기반(B방식)으로 변경 — "경쟁이 적을수록(여유 있을수록) 점수가 높아짐". API 필드명(`densityScore`)은 유지, 화면 라벨만 "경쟁 여유도"로 표기.
+
+⚠️ **B-1(min-max 정규화) → B-2(퍼센타일 랭크)로 재수정됨**: B-1 방식은 인구 19명짜리 극단 이상치(둔촌1동) 하나가 전체 스케일을 지배해, 실제로 중앙값보다 47배 과열된 지역도 "여유"로 잘못 표시되는 결함이 발견됨(`창업매력도_정의_재검토_기록.md` 10절). **최종 확정(B-2)**: `population >= 100`인 지역만 대상으로 `storeCountPerCapita`를 `PERCENT_RANK()`로 정규화(`attractivenessTier` 계산에 이미 쓰는 방식 재사용). `population < 100`은 해당 업종에 대해 densityScore/totalScore 결측(null) 처리 — 임의 추정 금지.
 
 ## 가중치 산출 방법 (v2 확정, 2026-08 재산출) — 수요/경쟁여유도 2축 하이브리드 AHP
 
@@ -139,7 +141,7 @@ SCORE_CACHE(regionCode FK, industryCode FK, totalScore, populationScore, househo
 | 경쟁 여유도(`densityScore`) | 0.33 | **0.5** |
 
 **구현 시 반드시 지킬 것**:
-1. `densityScore` 계산 로직을 "인구 대비 업소 밀도 역정규화" 방식으로 수정 (인구 0인 지역 등 분모 0 예외 처리 필요)
+1. `densityScore` 계산 로직을 "population≥100 지역 대상 `PERCENT_RANK()` 퍼센타일 정규화" 방식으로 수정 (population<100 지역은 densityScore/totalScore null 처리, 임의 추정 금지)
 2. 가중치 숫자를 코드에 하드코딩하지 말고 `ScoreWeightConfig`에 v1→v2로 교체 시딩
 3. **가중치·계산 로직 변경 후 `SCORE_CACHE` 전체 재계산 필수** — 안 하면 화면에 낡은 v1 기준 점수가 계속 보임
 4. 계산 과정은 API 명세서 5.2.2절, 재검토 전체 배경은 `창업매력도_정의_재검토_기록.md` 참고
@@ -151,7 +153,6 @@ SCORE_CACHE(regionCode FK, industryCode FK, totalScore, populationScore, househo
 - `GET /api/v1/industries` → `[{ industryCode, industryName }]` (level 필드 없음)
 - `GET /api/v1/scores/ranking?industryCode=` → `[{ regionCode, regionName, totalScore, populationScore, householdScore, densityScore, latitude, longitude, percentileRank, attractivenessTier }]` (flat, `householdScore`는 NOT NULL, `latitude`/`longitude`는 V6 시딩 완료 지역만 값 있음). 데이터 없으면 빈 배열을 200으로 반환(에러 아님).
 - `GET /api/v1/scores/detail?regionCode=&industryCode=` → `{ regionName, industryName, totalScore, populationStat: {...}, competitionStat: {...} }` (regionName/industryName은 최상위 flat). **`populationStat`/`competitionStat`은 객체 전체가 null일 수 있음** — 프론트는 반드시 옵셔널 체이닝으로 처리. `populationStat.householdCount`/`avgHouseholdSize`는 여전히 nullable(V2가 NOT NULL 승격 안 함).
-  - `competitionStat.storeCountPerCapita`(2026-08 추가): 총인구 1만명당 동일 업종 업소 수(소수 첫째자리, 예: `50.4`). `storeCount`/`snapshotDate`는 그대로 유지, 추가 필드임. 절대 업소 수만 보면 `densityScore`(경쟁 여유도) 등급과 안 맞아 보이는 문제(예: "업소 47개"인데 "여유 있음")를 보완하기 위해 추가 — densityScore 계산에 이미 쓰는 인구 대비 밀도를 그대로 노출한 것. 인구 데이터가 없거나 0인 지역은 `null`(`populationStat`이 null인 경우와 동일한 원칙).
 
 ## 점수 해석 기준 (확정) — 퍼센타일 밴드
 
@@ -169,6 +170,19 @@ SCORE_CACHE(regionCode FK, industryCode FK, totalScore, populationScore, househo
 **구현 시 지킬 것**: `industryCode`로 파티션한 `PERCENT_RANK()` SQL 윈도우 함수로 조회 시점 계산(별도 저장 불필요, 내부 DB 쿼리라 외부 API 호출 금지 원칙과 무관). 브레이크다운(인구/가구/경쟁)은 그대로 유지 — 퍼센타일은 "요약", 브레이크다운은 "근거".
 
 **보류된 대안**: 매출 데이터로 절대 기준선을 실증 도출하는 방법도 검토했으나, 전국 커버리지 매출 데이터(소상공인365)가 iframe 전용이라 원천 데이터 접근 불가 확인(2026-08). 향후 확장 아이디어로 보류.
+
+## 연령 구성 지표(ageScore) 추가 — KOSIS 도입 확정 (v3, 2026-08)
+
+**3번째 확정 공공데이터: KOSIS** "행정구역(읍면동)별/5세별 주민등록인구"(orgId 101, tblId `DT_1B04005N`). ⚠️ **코드 매핑 규칙 정정(2026-08, 실제 구현 시 라이브 검증으로 정정됨)**: `KOSIS = SGIS adm_cd + "00"`이 아니라 **`KOSIS = REGION.regionCode(상권정보 adongCd) + "00"`**이 맞는 규칙임(1168064000→역삼1동 정확히 확인). SGIS adm_cd로 변환하면 구가 다르게 매핑되는 오류가 생김 — 반드시 상권정보 코드 기준으로 구현할 것. 서울 426개 전수 검증 425/426(99.8%) 일치, 예외(용신동)는 기존 이슈 재확인.
+
+⚠️ **통계 정의 차이 인지 필수**: SGIS=추계인구, KOSIS=주민등록인구로 서로 다른 통계(426개 중 57개 동 20% 이상 차이, 최대 65%). **해결(B안)**: 총인구/가구는 SGIS 유지(재검증 불필요), `ageScore`의 20~39세 비율은 **KOSIS 내부에서만 분자/분모 계산**(SGIS 총인구와 혼합 금지). 화면에 통계 기준 차이 툴팁 필수.
+
+**업종별 방향(+/−/0, 데이터 근거 없는 팀 판단값)**: I2/R1/P1=+(청년층 유리), Q1=−(고령층 유리), 나머지 대분류=0(중립, 방향 안 매김). 방향 0인 업종은 기존 3개 지표만 사용 — 업종별로 지표 개수가 달라짐.
+
+**구현 시 지킬 것**:
+1. population<100 임계값 재사용(densityScore와 동일 원칙, 임의 추정 금지)
+2. AHP v3 재산출 필요(+/−/0 그룹별 가중치 세트 분리)
+3. 상세 배경은 API 명세서 5.2.5절 참고
 
 ## 업종 드롭다운 노출 기준 (확정) — 추천 30개
 

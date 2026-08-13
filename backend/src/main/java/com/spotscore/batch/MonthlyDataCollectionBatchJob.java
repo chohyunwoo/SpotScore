@@ -2,15 +2,20 @@ package com.spotscore.batch;
 
 import com.spotscore.batch.mapping.MappingValidationResult;
 import com.spotscore.batch.mapping.RegionCodeMappingValidator;
+import com.spotscore.collector.KosisAgeCollector;
+import com.spotscore.collector.dto.KosisAgeStatItemDto;
 import com.spotscore.collector.dto.SgisPopulationDto;
 import com.spotscore.collector.dto.StoreItemDto;
 import com.spotscore.config.BatchProperties;
 import com.spotscore.config.TargetRegion;
+import com.spotscore.domain.AgeStat;
 import com.spotscore.domain.IndustryCategory;
 import com.spotscore.domain.PopulationStat;
 import com.spotscore.domain.Region;
 import com.spotscore.domain.Store;
 import com.spotscore.domain.StoreCount;
+import com.spotscore.exception.ExternalApiException;
+import com.spotscore.repository.AgeStatRepository;
 import com.spotscore.repository.IndustryCategoryRepository;
 import com.spotscore.repository.PopulationStatRepository;
 import com.spotscore.repository.RegionRepository;
@@ -51,6 +56,8 @@ public class MonthlyDataCollectionBatchJob {
     private final PopulationStatRepository populationStatRepository;
     private final StoreCountRepository storeCountRepository;
     private final StoreRepository storeRepository;
+    private final AgeStatRepository ageStatRepository;
+    private final KosisAgeCollector kosisAgeCollector;
     private final ScoreCalculationService scoreCalculationService;
 
     public MonthlyDataCollectionBatchJob(BatchProperties batchProperties,
@@ -60,6 +67,8 @@ public class MonthlyDataCollectionBatchJob {
                                           PopulationStatRepository populationStatRepository,
                                           StoreCountRepository storeCountRepository,
                                           StoreRepository storeRepository,
+                                          AgeStatRepository ageStatRepository,
+                                          KosisAgeCollector kosisAgeCollector,
                                           ScoreCalculationService scoreCalculationService) {
         this.batchProperties = batchProperties;
         this.mappingValidator = mappingValidator;
@@ -68,6 +77,8 @@ public class MonthlyDataCollectionBatchJob {
         this.populationStatRepository = populationStatRepository;
         this.storeCountRepository = storeCountRepository;
         this.storeRepository = storeRepository;
+        this.ageStatRepository = ageStatRepository;
+        this.kosisAgeCollector = kosisAgeCollector;
         this.scoreCalculationService = scoreCalculationService;
     }
 
@@ -97,6 +108,7 @@ public class MonthlyDataCollectionBatchJob {
         int regionsSkipped = 0;
         int populationRowsSaved = 0;
         int storeCountRowsSaved = 0;
+        int ageStatRowsSaved = 0;
 
         for (String raw : rawTargets) {
             pace();
@@ -111,14 +123,17 @@ public class MonthlyDataCollectionBatchJob {
                 regionsCollected++;
                 populationRowsSaved += outcome.populationRowsSaved();
                 storeCountRowsSaved += outcome.storeCountRowsSaved();
+                ageStatRowsSaved += outcome.ageStatRowsSaved();
             } catch (Exception ex) {
                 log.error("배치 실패 - target: {} 처리 중 예외 발생", raw, ex);
                 regionsSkipped++;
             }
         }
 
-        log.info("수집 결과 요약 - 대상 {}건, 수집 성공 {}건, 스킵 {}건, population_stat 저장 {}건, store_count 저장 {}건",
-                rawTargets.size(), regionsCollected, regionsSkipped, populationRowsSaved, storeCountRowsSaved);
+        log.info("수집 결과 요약 - 대상 {}건, 수집 성공 {}건, 스킵 {}건, population_stat 저장 {}건, store_count 저장 {}건, " +
+                        "age_stat 저장 {}건",
+                rawTargets.size(), regionsCollected, regionsSkipped, populationRowsSaved, storeCountRowsSaved,
+                ageStatRowsSaved);
 
         try {
             scoreCalculationService.recalculateAll(snapshotDate.getYear(), snapshotDate);
@@ -131,7 +146,7 @@ public class MonthlyDataCollectionBatchJob {
         log.info("배치 종료 - 종료 시각: {}, 총 소요시간: {}ms", finishedAt, elapsedMillis);
 
         return new BatchResult(rawTargets.size(), regionsCollected, regionsSkipped,
-                populationRowsSaved, storeCountRowsSaved, elapsedMillis);
+                populationRowsSaved, storeCountRowsSaved, ageStatRowsSaved, elapsedMillis);
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -155,8 +170,9 @@ public class MonthlyDataCollectionBatchJob {
         savePopulationStat(region, populationDto, snapshotDate.getYear());
         int storeCountRowsSaved = saveStoreCounts(region, mapping.storeItems(), snapshotDate);
         saveStoreItems(region, mapping.storeItems(), snapshotDate);
+        int ageStatRowsSaved = saveAgeStat(region, snapshotDate.getYear(), snapshotDate);
 
-        return new RegionCollectionOutcome(1, storeCountRowsSaved);
+        return new RegionCollectionOutcome(1, storeCountRowsSaved, ageStatRowsSaved);
     }
 
     private String resolveRegionName(MappingValidationResult mapping) {
@@ -180,6 +196,54 @@ public class MonthlyDataCollectionBatchJob {
                         () -> populationStatRepository.save(
                                 new PopulationStat(region, year, totalPopulation, density, totalFamily, avgFamilyMemberCount))
                 );
+    }
+
+    // KOSIS 연령별 인구 수집·저장은 아직 densityScore/totalScore 등 기존 점수 계산에
+    // 반영되지 않는 별도 지표(ageScore, CLAUDE.md 연령 구성 지표 섹션 3단계)라, 실패해도
+    // 이 지역의 SGIS/상권정보 수집·점수 재계산 전체를 막지 않고 AGE_STAT 저장만 스킵한다.
+    private int saveAgeStat(Region region, int year, LocalDate snapshotDate) {
+        List<KosisAgeStatItemDto> items;
+        try {
+            items = kosisAgeCollector.collect(region.getRegionCode()).collectList().block();
+        } catch (ExternalApiException ex) {
+            log.error("배치 실패 - regionCode: {} KOSIS 연령별 인구 수집 실패 (age_stat 저장 스킵, 나머지 배치는 계속 진행)",
+                    region.getRegionCode(), ex);
+            return 0;
+        }
+        if (items == null || items.isEmpty()) {
+            log.warn("age_stat 저장 스킵 - regionCode: {} KOSIS 응답 0건", region.getRegionCode());
+            return 0;
+        }
+
+        Long kosisTotalPopulation = null;
+        long age2039Sum = 0;
+        boolean anyAgeBandParsed = false;
+        for (KosisAgeStatItemDto item : items) {
+            Long value = KosisValueParser.parseLong(region.getRegionCode(), "DT(ageCode=" + item.ageCode() + ")",
+                    item.value());
+            if ("0".equals(item.ageCode())) {
+                kosisTotalPopulation = value;
+            } else if (value != null) {
+                age2039Sum += value;
+                anyAgeBandParsed = true;
+            }
+        }
+
+        if (kosisTotalPopulation == null) {
+            log.warn("age_stat 저장 스킵 - regionCode: {} KOSIS 총인구(C2=0) 값 없음", region.getRegionCode());
+            return 0;
+        }
+        Long age2039Cnt = anyAgeBandParsed ? age2039Sum : null;
+        Long finalKosisTotalPopulation = kosisTotalPopulation;
+
+        ageStatRepository.findByRegionAndYear(region, year)
+                .ifPresentOrElse(
+                        existing -> existing.update(age2039Cnt, finalKosisTotalPopulation, snapshotDate),
+                        () -> ageStatRepository.save(new AgeStat(region, year, age2039Cnt, finalKosisTotalPopulation, snapshotDate))
+                );
+        log.info("age_stat 저장 완료 - regionCode: {}, year: {}, age2039Cnt: {}, kosisTotalPopulation: {}",
+                region.getRegionCode(), year, age2039Cnt, finalKosisTotalPopulation);
+        return 1;
     }
 
     private int saveStoreCounts(Region region, List<StoreItemDto> storeItems, LocalDate snapshotDate) {

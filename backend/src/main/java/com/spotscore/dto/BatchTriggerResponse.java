@@ -8,6 +8,7 @@ public record BatchTriggerResponse(
         int regionsSkipped,
         int populationRowsSaved,
         int storeCountRowsSaved,
+        int ageStatRowsSaved,
         long elapsedMillis
 ) {
 
@@ -18,6 +19,7 @@ public record BatchTriggerResponse(
                 result.regionsSkipped(),
                 result.populationRowsSaved(),
                 result.storeCountRowsSaved(),
+                result.ageStatRowsSaved(),
                 result.elapsedMillis()
         );
     }

@@ -1,5 +1,6 @@
 package com.spotscore.dto;
 
+import com.spotscore.domain.AgeDirection;
 import com.spotscore.domain.IndustryCategory;
 import com.spotscore.domain.PopulationStat;
 import com.spotscore.domain.Region;
@@ -36,6 +37,7 @@ public record ScoreDetailResponse(
         BigDecimal densityScore,
         PopulationStatDetail populationStat,
         CompetitionStatDetail competitionStat,
+        AgeStatDetail ageStat,
         LocalDateTime calculatedAt
 ) {
 
@@ -91,7 +93,20 @@ public record ScoreDetailResponse(
         }
     }
 
-    public static ScoreDetailResponse of(ScoreCache scoreCache, PopulationStat populationStat, StoreCount storeCount) {
+    // ageRatioPercent/ageScore는 KOSIS(주민등록인구 기준) 원자료 기반이라
+    // populationStat(SGIS 추계인구 기준)과 통계 기준이 다르다는 것을 dataSource로
+    // 명시한다(CLAUDE.md 연령 구성 지표 섹션). 아직 totalScore/가중치에는 반영되지
+    // 않는 단계라 ageScore가 null이어도 다른 브레이크다운에는 영향이 없다.
+    public record AgeStatDetail(
+            BigDecimal ageRatioPercent,
+            BigDecimal ageScore,
+            AgeDirection direction,
+            String dataSource
+    ) {
+    }
+
+    public static ScoreDetailResponse of(ScoreCache scoreCache, PopulationStat populationStat, StoreCount storeCount,
+                                          AgeStatDetail ageStat) {
         Region region = scoreCache.getRegion();
         IndustryCategory industry = scoreCache.getIndustry();
         Long totalPopulation = populationStat == null ? null : populationStat.getTotalPopulation();
@@ -106,6 +121,7 @@ public record ScoreDetailResponse(
                 scoreCache.getDensityScore(),
                 PopulationStatDetail.from(populationStat),
                 CompetitionStatDetail.from(storeCount, totalPopulation),
+                ageStat,
                 scoreCache.getCalculatedAt()
         );
     }
