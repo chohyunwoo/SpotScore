@@ -1,9 +1,13 @@
 package com.spotscore.scoring;
 
 /**
- * AHP 2단계 쌍대비교로부터 계산된 리프 3개(인구 규모/가구 구조/경쟁 밀집도)의
- * 최종 가중치. populationWeight + householdWeight + competitionWeight = 1이 되도록
- * ScoreWeightService에서 계산된다.
+ * AHP 쌍대비교로부터 계산된 리프 가중치. NEUTRAL 그룹은 인구 규모/가구 구조/
+ * 경쟁 여유도 3개만 쓰고(ageWeight=null, 합=1), DIRECTIONAL 그룹은 연령적합도가
+ * 추가되어 4개 리프의 합이 1이 되도록 ScoreWeightService에서 계산된다.
  */
-record LeafWeights(double populationWeight, double householdWeight, double competitionWeight) {
+record LeafWeights(double populationWeight, double householdWeight, double competitionWeight, Double ageWeight) {
+
+    boolean hasAgeWeight() {
+        return ageWeight != null;
+    }
 }

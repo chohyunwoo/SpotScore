@@ -96,7 +96,9 @@ public class ScoreCalculationService {
                 .collect(Collectors.groupingBy(StoreCount::getIndustry,
                         Collectors.toMap(StoreCount::getRegion, sc -> (double) sc.getStoreCount())));
 
-        LeafWeights weights = scoreWeightService.loadLeafWeights();
+        // industry_age_direction 기반 DIRECTIONAL 그룹 분기는 이번 작업 범위 밖(별도 이슈) -
+        // 이 배치는 지금까지와 동일하게 NEUTRAL(3리프) 가중치만 사용한다.
+        LeafWeights weights = scoreWeightService.loadLeafWeights(WeightGroup.NEUTRAL);
 
         int cacheSaved = 0;
         int densityExcludedLowPopulation = 0;
