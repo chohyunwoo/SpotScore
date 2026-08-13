@@ -219,6 +219,39 @@ const WeightNotice = styled.p`
   width: 100%;
 `;
 
+const CardTitleRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: ${({ theme }) => theme.spacing.xs};
+`;
+
+/**
+ * 별도 Tooltip 컴포넌트를 새로 만들지 않고, 이미 이 코드베이스에서 쓰고 있는
+ * 네이티브 title 속성 호버 툴팁 패턴(MapDashboard의 TierDot)을 그대로 재사용한다 -
+ * 디자인 시스템에 신규 요소를 추가하지 말라는 제약과도 맞다.
+ */
+const InfoIcon = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: ${({ theme }) => theme.colors.backgroundAlt};
+  color: ${({ theme }) => theme.colors.textSecondary};
+  font-size: 11px;
+  font-weight: ${({ theme }) => theme.typography.weight.semibold};
+  cursor: help;
+`;
+
+const AGE_DIRECTION_DESCRIPTION: Record<'POSITIVE' | 'NEGATIVE', string> = {
+  POSITIVE: '20~30대 비율이 높을수록 유리한 업종입니다',
+  NEGATIVE: '고령층 비율이 높을수록 유리한 업종입니다',
+};
+
+const AGE_STAT_SOURCE_TOOLTIP =
+  '이 지표는 주민등록 인구(KOSIS) 기준으로 계산돼요. 다른 지표(인구 규모·가구 구조·경쟁 여유도)는 추계 인구(SGIS) 기준이라 두 통계의 인구수가 정확히 일치하지 않을 수 있어요.';
+
 function useWeightNoticeText(): string {
   const { data: weights, isLoading, isError } = useScoreWeights();
 
@@ -233,12 +266,31 @@ function useWeightNoticeText(): string {
   return `이 지역·업종 조합에는 수요 ${demandPercent}% · 공급 ${supplyPercent}% 가중치가 적용됐어요.`;
 }
 
+/**
+ * AGE_WEIGHT(DIRECTIONAL 업종에서 적용되는 4번째 리프 가중치)도 수요/공급과 동일하게
+ * SCORE_WEIGHT_CONFIG에서 조회한 값만 쓴다 - 0.25를 코드에 매직 넘버로 넣지 않는다
+ * (CLAUDE.md "가중치 숫자를 매직 넘버로 코드에 넣지 말 것").
+ */
+function useAgeWeightNoticeText(): string {
+  const { data: weights, isLoading, isError } = useScoreWeights();
+
+  if (isLoading) return '가중치 정보를 불러오는 중...';
+  if (isError) return '가중치 정보를 불러오지 못했습니다. 새로고침 후 다시 시도해주세요.';
+
+  const agePercent = findWeightPercent(weights, 'AGE_WEIGHT');
+  if (agePercent === null) {
+    return '가중치 설정을 찾을 수 없습니다 (SCORE_WEIGHT_CONFIG 시딩 확인 필요).';
+  }
+  return `이 업종에는 연령적합도 ${agePercent}% 가중치가 추가로 적용됐어요.`;
+}
+
 export function RegionIndustryDetailPanel() {
   const { industryCode, regionCode, setRegionCode } = useSelection();
   const { data: detail, isLoading, isError, error } = useScoreDetail(regionCode, industryCode);
   const isNotFound = error instanceof ApiError && error.status === 404;
   const theme = useTheme();
   const weightNoticeText = useWeightNoticeText();
+  const ageWeightNoticeText = useAgeWeightNoticeText();
 
   // ScoreDetailResponse엔 percentileRank/attractivenessTier가 없다 - MapDashboard가
   // 이미 같은 industryCode로 랭킹을 불러와 있어 TanStack Query 캐시를 재사용한다.
@@ -261,6 +313,9 @@ export function RegionIndustryDetailPanel() {
     }
     if (!detail.competitionStat) missing.push('competitionStat');
     if (detail.densityScore === null) missing.push('densityScore(인구 표본 부족)');
+    if (detail.ageDirection && detail.ageStat.ageScore === null) {
+      missing.push('ageStat.ageScore(연령 통계 표본 부족)');
+    }
     return missing;
   }, [detail]);
 
@@ -324,6 +379,8 @@ export function RegionIndustryDetailPanel() {
   ];
   const supplyChartData =
     detail.densityScore !== null ? [{ name: '경쟁 여유도', score: detail.densityScore }] : [];
+  const ageChartData =
+    detail.ageStat.ageScore !== null ? [{ name: '연령 적합도', score: detail.ageStat.ageScore }] : [];
 
   return (
     <PanelRoot>
@@ -480,6 +537,50 @@ export function RegionIndustryDetailPanel() {
           </CardHint>
           <WeightNotice>{weightNoticeText}</WeightNotice>
         </Card>
+
+        {detail.ageDirection && (
+          <Card>
+            <CardTitleRow>
+              <CardTitle>연령 적합도</CardTitle>
+              <InfoIcon title={AGE_STAT_SOURCE_TOOLTIP} aria-label="통계 기준 안내">
+                i
+              </InfoIcon>
+            </CardTitleRow>
+            <CardSubtitle>20~39세 인구 비율 기반 ({detail.ageStat.dataSource})</CardSubtitle>
+            {detail.ageStat.ageScore !== null ? (
+              <ChartWrapper>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={ageChartData}>
+                    <XAxis dataKey="name" interval={0} tick={{ fontSize: 11, fill: theme.colors.textSecondary }} />
+                    <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: theme.colors.textSecondary }} width={28} />
+                    <Tooltip />
+                    <Bar dataKey="score" radius={[4, 4, 0, 0]}>
+                      {ageChartData.map((entry) => (
+                        <Cell key={entry.name} fill={getScoreScaleColor(entry.score, theme)} stroke={theme.colors.border} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </ChartWrapper>
+            ) : (
+              <InsufficientChartPlaceholder>
+                {INSUFFICIENT_SAMPLE_LABEL}
+                <br />
+                (연령 통계 표본이 부족하거나 아직 집계되지 않았어요)
+              </InsufficientChartPlaceholder>
+            )}
+            <RawValueList>
+              <RawValueRow>
+                <dt>20~39세 비율</dt>
+                <dd>
+                  {detail.ageStat.ageRatioPercent !== null ? `${detail.ageStat.ageRatioPercent}%` : NA}
+                </dd>
+              </RawValueRow>
+            </RawValueList>
+            <CardHint>{AGE_DIRECTION_DESCRIPTION[detail.ageDirection]}</CardHint>
+            <WeightNotice>{ageWeightNoticeText}</WeightNotice>
+          </Card>
+        )}
       </CardsGrid>
     </PanelRoot>
   );
