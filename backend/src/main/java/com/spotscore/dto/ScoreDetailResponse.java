@@ -25,6 +25,10 @@ import java.time.LocalDateTime;
  * 표시할지는 CLAUDE.md에 아직 결정되지 않은 사항으로 남아있다 - 백엔드가 임의로
  * 정하지 않고, 값은 null 그대로 두고 dataAvailable로 "원래 없는 값인지"를 그대로
  * 알려준다. 이 결정은 프론트에 위임한다.
+ *
+ * ageDirection은 프론트가 연령적합도 카드의 렌더링 여부/문구(POSITIVE·NEGATIVE)를
+ * 최상위 필드 하나로 바로 분기할 수 있도록 ageStat.direction()을 끌어올린 값이다 -
+ * NEUTRAL(해당 카드 자체가 없는 업종)은 null로 내려온다.
  */
 public record ScoreDetailResponse(
         String regionCode,
@@ -35,6 +39,7 @@ public record ScoreDetailResponse(
         BigDecimal populationScore,
         BigDecimal householdScore,
         BigDecimal densityScore,
+        AgeDirection ageDirection,
         PopulationStatDetail populationStat,
         CompetitionStatDetail competitionStat,
         AgeStatDetail ageStat,
@@ -95,8 +100,10 @@ public record ScoreDetailResponse(
 
     // ageRatioPercent/ageScore는 KOSIS(주민등록인구 기준) 원자료 기반이라
     // populationStat(SGIS 추계인구 기준)과 통계 기준이 다르다는 것을 dataSource로
-    // 명시한다(CLAUDE.md 연령 구성 지표 섹션). 아직 totalScore/가중치에는 반영되지
-    // 않는 단계라 ageScore가 null이어도 다른 브레이크다운에는 영향이 없다.
+    // 명시한다(CLAUDE.md 연령 구성 지표 섹션). DIRECTIONAL 업종(POSITIVE/NEGATIVE)은
+    // ScoreCalculationService가 이 ageScore를 totalScore 계산에 4번째 리프로 이미
+    // 반영한 뒤 계산한 값이다 - direction/ageScore가 여기 노출되는 건 그 계산 근거를
+    // 보여주기 위함이지, 별도로 반영 여부가 갈리는 단계가 아니다.
     public record AgeStatDetail(
             BigDecimal ageRatioPercent,
             BigDecimal ageScore,
@@ -119,10 +126,21 @@ public record ScoreDetailResponse(
                 scoreCache.getPopulationScore(),
                 scoreCache.getHouseholdScore(),
                 scoreCache.getDensityScore(),
+                topLevelAgeDirection(ageStat),
                 PopulationStatDetail.from(populationStat),
                 CompetitionStatDetail.from(storeCount, totalPopulation),
                 ageStat,
                 scoreCache.getCalculatedAt()
         );
+    }
+
+    // 프론트가 4번째 카드 렌더링 여부/문구를 최상위 필드 하나로 바로 분기할 수 있도록
+    // ageStat.direction()을 최상위로 끌어올린다. NEUTRAL(연령적합도 자체가 없는 업종)은
+    // null로 내려 "이 업종엔 해당 카드가 없다"를 명확히 구분한다.
+    private static AgeDirection topLevelAgeDirection(AgeStatDetail ageStat) {
+        if (ageStat == null || ageStat.direction() == AgeDirection.NEUTRAL) {
+            return null;
+        }
+        return ageStat.direction();
     }
 }
