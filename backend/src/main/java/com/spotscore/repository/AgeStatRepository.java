@@ -13,6 +13,13 @@ public interface AgeStatRepository extends JpaRepository<AgeStat, Long> {
 
     Optional<AgeStat> findByRegionAndYear(Region region, int year);
 
+    // ScoreCalculationService 배치용 - 연령 퍼센타일은 업종과 무관하게 지역
+    // 단위로 한 번만 계산하면 되므로(density처럼 업종별로 값이 달라지지 않음),
+    // findAgeRatioPercentileRank(지역 1개씩 조회하는 상세 API 전용 쿼리)를 배치
+    // 루프에서 재사용하면 N+1이 된다 - 대신 이 목록을 인메모리로 모아
+    // PercentileRankNormalizer로 일괄 계산한다.
+    List<AgeStat> findAllByYear(int year);
+
     // ageRatioPercent(20~39세 비중)의 PERCENT_RANK()를 조회 시점에 계산한다 - CLAUDE.md
     // "점수 해석 기준"과 동일한 패턴(ScoreCacheRepository.findRankingWithPercentile)을
     // 재사용하되, densityScore와 동일한 최소 인구 기준(population_stat.total_population >=

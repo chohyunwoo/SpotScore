@@ -17,7 +17,10 @@ import java.time.LocalDateTime;
 /**
  * 지역 x 업종 조합별 산출된 종합/브레이크다운 점수 캐시. household_score는 V3
  * 마이그레이션으로 추가되어 대시보드 상세 패널의 3개 브레이크다운
- * (인구 규모/가구 구조/경쟁 밀집도)을 각각 별도 컬럼으로 노출한다.
+ * (인구 규모/가구 구조/경쟁 밀집도)을 각각 별도 컬럼으로 노출한다. age_score는
+ * V12 마이그레이션으로 추가 - DIRECTIONAL 업종(연령적합도 적용 대상)에서만 값이
+ * 있고, NEUTRAL 업종과 population<100 지역은 density_score와 동일한 원칙으로
+ * null이다(ScoreCalculationService 참고).
  */
 @Entity
 @Table(name = "score_cache", uniqueConstraints = @UniqueConstraint(columnNames = {"region_code", "industry_code"}))
@@ -49,6 +52,9 @@ public class ScoreCache {
     @Column(name = "household_score", nullable = false)
     private BigDecimal householdScore;
 
+    @Column(name = "age_score")
+    private BigDecimal ageScore;
+
     @Column(name = "calculated_at", nullable = false)
     private LocalDateTime calculatedAt;
 
@@ -57,22 +63,24 @@ public class ScoreCache {
 
     public ScoreCache(Region region, IndustryCategory industry, BigDecimal totalScore,
                        BigDecimal populationScore, BigDecimal householdScore, BigDecimal densityScore,
-                       LocalDateTime calculatedAt) {
+                       BigDecimal ageScore, LocalDateTime calculatedAt) {
         this.region = region;
         this.industry = industry;
         this.totalScore = totalScore;
         this.populationScore = populationScore;
         this.householdScore = householdScore;
         this.densityScore = densityScore;
+        this.ageScore = ageScore;
         this.calculatedAt = calculatedAt;
     }
 
     public void update(BigDecimal totalScore, BigDecimal populationScore, BigDecimal householdScore,
-                        BigDecimal densityScore, LocalDateTime calculatedAt) {
+                        BigDecimal densityScore, BigDecimal ageScore, LocalDateTime calculatedAt) {
         this.totalScore = totalScore;
         this.populationScore = populationScore;
         this.householdScore = householdScore;
         this.densityScore = densityScore;
+        this.ageScore = ageScore;
         this.calculatedAt = calculatedAt;
     }
 
@@ -102,6 +110,10 @@ public class ScoreCache {
 
     public BigDecimal getHouseholdScore() {
         return householdScore;
+    }
+
+    public BigDecimal getAgeScore() {
+        return ageScore;
     }
 
     public LocalDateTime getCalculatedAt() {

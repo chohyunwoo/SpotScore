@@ -1,5 +1,7 @@
 package com.spotscore.scoring;
 
+import com.spotscore.domain.AgeDirection;
+
 /**
  * 리프 가중치 계산식을 고를 때 쓰는 그룹. 업종별 AgeDirection(POSITIVE/NEGATIVE/
  * NEUTRAL, domain.AgeDirection)과는 다른 축이다 - POSITIVE/NEGATIVE 업종은 가중치
@@ -9,5 +11,9 @@ package com.spotscore.scoring;
  */
 public enum WeightGroup {
     NEUTRAL,
-    DIRECTIONAL
+    DIRECTIONAL;
+
+    public static WeightGroup from(AgeDirection direction) {
+        return direction == AgeDirection.NEUTRAL ? NEUTRAL : DIRECTIONAL;
+    }
 }
