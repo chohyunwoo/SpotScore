@@ -86,6 +86,28 @@ export interface CompetitionStatDetail {
   storeCountPerCapita: number | null;
 }
 
+/**
+ * ScoreDetailResponse의 최상위 ageDirection 필드 (2026-08 추가, ScoreDetailResponse.java
+ * topLevelAgeDirection() 확인) — 업종의 AgeDirection이 NEUTRAL(연령적합도 지표 자체가
+ * 없는 업종)이면 백엔드가 null로 내려보내, "카드를 아예 렌더링하지 않아야 하는지"를
+ * 프론트가 이 필드 하나로 바로 분기할 수 있게 한다.
+ */
+export type AgeDirection = 'POSITIVE' | 'NEGATIVE' | null;
+
+/**
+ * ScoreDetailResponse.AgeStatDetail 확인 — direction은 여기선 NEUTRAL도 올 수 있다
+ * (매핑 누락 등으로 AgeScoreService가 기본값 NEUTRAL을 반환하는 경우 포함). ageScore/
+ * ageRatioPercent는 인구 100명 미만·연도 없음·원자료 미수집·NEUTRAL 업종 등 여러 사유로
+ * null일 수 있다(원인은 서버 로그로만 구분되고 응답엔 사유가 실리지 않음) — DetailPanel은
+ * "값 없음"으로만 처리하고 사유를 추측해 표시하지 않는다.
+ */
+export interface AgeStatDetail {
+  ageRatioPercent: number | null;
+  ageScore: number | null;
+  direction: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL';
+  dataSource: string;
+}
+
 /** GET /api/v1/scores/detail?regionCode=...&industryCode=... 응답 (ScoreDetailResponse.java 확인) */
 export interface ScoreDetail {
   regionCode: string;
@@ -116,6 +138,10 @@ export interface ScoreDetail {
   populationStat: PopulationStatDetail | null;
   /** 위와 동일한 이유로 해당 지역×업종의 store_count row가 없으면 전체가 null. */
   competitionStat: CompetitionStatDetail | null;
+  /** NEUTRAL 업종(연령적합도 지표 없음)은 null — 4번째 카드 렌더링 여부 분기용. */
+  ageDirection: AgeDirection;
+  /** AgeScoreService.computeAgeStat이 항상 객체를 반환하므로 이 필드 자체는 null이 아님. */
+  ageStat: AgeStatDetail;
   calculatedAt: string;
 }
 
