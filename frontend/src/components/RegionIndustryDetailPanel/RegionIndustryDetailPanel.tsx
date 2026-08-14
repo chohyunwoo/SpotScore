@@ -219,6 +219,19 @@ const WeightNotice = styled.p`
   width: 100%;
 `;
 
+/**
+ * NEUTRAL 업종(연령적합도 카드 자체가 없는 업종)일 때 카드 밖(PanelRoot 최하단)에
+ * 노출하는 안내 - CardHint와 스타일은 동일하지만 카드 안이 아니라 카드 자체가 없는
+ * 상황을 설명하는 문맥이라 별도 이름으로 둔다(TierHint/CardHint가 이미 같은 CSS를
+ * 문맥별로 따로 두고 있는 것과 동일한 패턴 - 신규 색상/토큰은 추가하지 않는다).
+ */
+const NeutralAgeMetricNotice = styled.p`
+  margin: ${({ theme }) => theme.spacing.md} 0 0;
+  font-size: ${({ theme }) => theme.typography.caption.size};
+  color: ${({ theme }) => theme.colors.textSecondary};
+  line-height: ${({ theme }) => theme.typography.caption.lineHeight};
+`;
+
 const CardTitleRow = styled.div`
   display: flex;
   align-items: center;
@@ -590,6 +603,17 @@ export function RegionIndustryDetailPanel() {
           </Card>
         )}
       </CardsGrid>
+
+      {/*
+        NEUTRAL 업종(ageDirection === null)은 densityScore/totalScore가 null일 때처럼
+        이유를 설명하는 문구 없이 카드가 그냥 없어지면, 업종을 바꿨을 때 카드 개수가
+        조용히 줄어들어 "로딩 실패인가?"로 오해하기 쉽다(CLAUDE.md 대시보드 설계 원칙
+        "왜 이 점수인가를 사용자가 확인할 수 있어야 한다"와 어긋남) - 카드를 새로 만들지
+        않고 패널 하단에 짧은 설명만 추가한다.
+      */}
+      {!detail.ageDirection && (
+        <NeutralAgeMetricNotice>이 업종은 연령 구성과 무관해 연령적합도 지표를 사용하지 않아요.</NeutralAgeMetricNotice>
+      )}
     </PanelRoot>
   );
 }
