@@ -5,6 +5,7 @@ import { useStores } from '../../api/stores';
 import { useSelection } from '../../context/SelectionContext';
 import { IndustrySelector } from '../IndustrySelector/IndustrySelector';
 import { RegionIndustryDetailPanel } from '../RegionIndustryDetailPanel/RegionIndustryDetailPanel';
+import { RegionSearchBox } from '../RegionSearchBox/RegionSearchBox';
 import {
   ATTRACTIVENESS_TIER_ICON,
   ATTRACTIVENESS_TIER_LABEL,
@@ -606,6 +607,7 @@ export function MapDashboard() {
         ) : (
           <>
             <MapContainer ref={containerRef} />
+            <RegionSearchBox industryCode={industryCode} ranking={rankingList} onSelectRegion={setRegionCode} />
             {!industryCode && (
               <EmptyOverlay>
                 업종을 선택하면 지역별 점수가 지도에 표시됩니다.
