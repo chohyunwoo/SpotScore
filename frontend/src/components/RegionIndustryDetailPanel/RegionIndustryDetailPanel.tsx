@@ -538,6 +538,14 @@ export function RegionIndustryDetailPanel() {
           <WeightNotice>{weightNoticeText}</WeightNotice>
         </Card>
 
+        {/*
+          ageDirection이 non-null이면(=이 업종엔 연령적합도 지표가 존재) 카드를 렌더링하고,
+          그 안에서 ageScore가 null인 경우(인구 100명 미만 등 표본 부족)는 densityScore와
+          동일한 기존 컨벤션(카드 자체를 숨기지 않고 InsufficientChartPlaceholder로 "산출
+          불가"를 명시)을 그대로 따른다 - ageDirection이 이미 "이 업종엔 이 지표가 적용된다"는
+          의미를 담고 있으므로, 표본 부족은 카드를 통째로 숨기기보다 그 사실 자체를 보여주는
+          쪽이 사용자에게 더 많은 정보를 준다.
+        */}
         {detail.ageDirection && (
           <Card>
             <CardTitleRow>
