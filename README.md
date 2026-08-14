@@ -1,7 +1,8 @@
 # SpotScore
 
-공공데이터(SGIS 통계청 + 소상공인시장진흥공단 상가정보) 기반 창업 입지 추천 대시보드.
-지역별 업종 경쟁 밀집도와 인구 통계를 조합해 **"지역 × 업종" 조합의 창업 매력도 점수**를 산출한다.
+공공데이터(SGIS 통계청 + 소상공인시장진흥공단 상가정보 + KOSIS 국가통계포털) 기반 창업 입지 추천 대시보드.
+지역별 업종 경쟁 밀집도와 인구 통계, 업종에 따라서는 연령 구성(연령적합도)까지 조합해
+**"지역 × 업종" 조합의 창업 매력도 점수**를 산출한다.
 
 - 백엔드는 전국 대응 구조로 설계, 프론트 UI는 MVP 범위(서울)로 축소
 - 점수는 항상 지역과 업종을 함께 지정해야 산출 가능 (지역만으로는 조회 불가)
@@ -15,7 +16,7 @@
 | 프론트엔드 | React + TypeScript (Vite) |
 | DB | PostgreSQL (Docker Compose) + Flyway |
 | ORM | Spring Data JPA |
-| 외부 API 호출 | WebClient (SGIS + 상권정보 비동기 병렬 호출) |
+| 외부 API 호출 | WebClient (SGIS + 상권정보 + KOSIS 비동기 병렬 호출) |
 | 배치 | Spring `@Scheduled` (월 1회) |
 | 지도 | Kakao Map JS SDK |
 | 차트 | Recharts |
@@ -26,7 +27,7 @@
 ## 데이터 흐름
 
 ```
-[외부 API] SGIS + 상권정보
+[외부 API] SGIS + 상권정보 + KOSIS
       ↓ (배치에서만 호출, 실시간 호출 금지)
 [배치] @Scheduled 배치·정규화 (월 1회)
       ↓
@@ -54,12 +55,11 @@ backend/   Spring Boot (Gradle)
 
 frontend/  React (Vite, TypeScript)
   src/
-    api/                 REST 클라이언트 (TanStack Query)
+    api/                          REST 클라이언트 (TanStack Query)
     components/
-      RankingList/
-      MapView/            Kakao Map
-      DetailPanel/        Recharts 브레이크다운
       IndustrySelector/
+      MapDashboard/                Kakao Map + 랭킹 리스트 (양방향 연동)
+      RegionIndustryDetailPanel/   Recharts 브레이크다운(수요/공급/연령적합도)
     context/
 ```
 
@@ -71,6 +71,7 @@ frontend/  React (Vite, TypeScript)
 - 외부 API 키 발급
   - SGIS(통계청 통계지리정보서비스): https://sgis.kostat.go.kr
   - 소상공인시장진흥공단 상가(상권)정보: https://www.data.go.kr
+  - KOSIS(통계청 국가통계포털, 연령별 인구 - 연령적합도 지표): https://kosis.kr/openapi
   - Kakao Map JavaScript 키: Kakao Developers > 내 애플리케이션
 
 ### 2. 환경 변수
@@ -89,13 +90,17 @@ docker compose up -d          # PostgreSQL (Flyway가 기동 시 자동 마이�
 ```
 
 - Swagger UI: `http://localhost:8080/swagger-ui.html`
-- dev 프로파일 기본 배치 대상: 강남구 역삼1동/역삼2동 (env `SPOTSCORE_BATCH_TARGET_REGIONS`로 확장 가능)
+- dev 프로파일 기본 배치 대상: 강남구 역삼1동/역삼2동 (env `SPOTSCORE_BATCH_TARGET_REGIONS`로 확장 가능).
+  이 값을 비워두면 REGION 테이블에 sgisAdmCd가 매핑된 지역 전체(서울 확장 시 426개)가
+  자동으로 배치 대상이 된다 — 지역을 환경변수로 일일이 나열하지 않기 위함.
 
-### 4. 배치 실행 + 좌표 시딩 (최초 1회)
+### 4. 초기 시딩 + 배치 실행 (최초 1회)
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/admin/batch/run
-curl -X POST http://localhost:8080/api/v1/admin/regions/seed-coordinates
+curl -X POST http://localhost:8080/api/v1/admin/industries/seed-featured   # 업종 드롭다운 노출(featured) 시딩
+curl -X POST http://localhost:8080/api/v1/admin/industries/seed-age-direction  # 업종별 연령적합도 방향성(POSITIVE/NEGATIVE/NEUTRAL) 시딩
+curl -X POST http://localhost:8080/api/v1/admin/batch/run                  # SGIS/상권정보/KOSIS 수집 + 점수 계산
+curl -X POST http://localhost:8080/api/v1/admin/regions/seed-coordinates  # 지도 마커용 좌표 시딩
 ```
 
 ### 5. 프론트엔드 실행
@@ -114,7 +119,7 @@ npm run dev                   # http://localhost:5173 (Kakao Map 키가 이 도�
 | --- | --- | --- |
 | GET | `/api/v1/industries` | 업종 목록 (기본 featured=true 30개, `?all=true`로 전체) |
 | GET | `/api/v1/scores/ranking?industryCode=` | 업종별 지역 랭킹 (점수·퍼센타일·좌표) |
-| GET | `/api/v1/scores/detail?regionCode=&industryCode=` | 지역×업종 상세 (종합 점수 + 브레이크다운) |
+| GET | `/api/v1/scores/detail?regionCode=&industryCode=` | 지역×업종 상세 (종합 점수 + 브레이크다운, 업종에 따라 연령적합도 포함) |
 | POST | `/api/v1/admin/batch/run` | 배치 즉시 실행 |
 | POST | `/api/v1/admin/regions/seed-coordinates` | 지역 좌표(위경도) 시딩 |
 | POST | `/api/v1/admin/regions/discover-seoul` | 서울 행정동 크로스워크 탐색 |
@@ -122,6 +127,7 @@ npm run dev                   # http://localhost:5173 (Kakao Map 키가 이 도�
 | POST | `/api/v1/admin/scores/recalculate` | 점수 재계산 |
 | GET | `/api/v1/admin/score-weights` | AHP 가중치 설정 조회 |
 | POST | `/api/v1/admin/industries/seed-featured` | 업종 드롭다운 노출(featured) 목록 시딩 |
+| POST | `/api/v1/admin/industries/seed-age-direction` | 업종별 연령적합도 방향성(POSITIVE/NEGATIVE/NEUTRAL) 시딩 |
 
 전체 요청/응답 스키마는 Swagger UI에서 확인.
 
