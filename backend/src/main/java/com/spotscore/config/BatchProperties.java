@@ -14,6 +14,11 @@ import java.util.Objects;
  * Region.sgisAdmCd 참고) 하나의 코드를 양쪽에 그대로 쓸 수 없다. 예:
  * "11230640:11680640" (강남구 역삼1동, 실제 두 API로 검증된 값).
  *
+ * 비워두면(dev 기본값처럼 소수 지역만 지정하지 않는 경우) MonthlyDataCollectionBatchJob이
+ * REGION 테이블에서 sgisAdmCd가 채워진 지역 전체를 대신 조회해 대상으로 삼는다 -
+ * 서울 전체(426개) 등 지역 수가 많아지면 이 값을 환경변수 문자열로 일일이 나열하는
+ * 게 비현실적이고 그 자체가 하드코딩이기 때문(#9).
+ *
  * requestIntervalMillis: 지역 수가 많아지면(서울 전체 등) 지역마다 상권정보 API를
  * 연달아 호출하게 되는데, 페이싱 없이 돌렸을 때 실제로 "429 Too Many Requests"를
  * 받은 적이 있어(SeoulRegionDiscoveryService에서 먼저 발견) 배치에도 안전장치로

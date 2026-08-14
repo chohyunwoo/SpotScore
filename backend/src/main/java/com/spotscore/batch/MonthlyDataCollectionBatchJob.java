@@ -99,9 +99,10 @@ public class MonthlyDataCollectionBatchJob {
         Instant startedAt = Instant.now();
         log.info("배치 시작 - snapshotDate: {}, 시작 시각: {}", snapshotDate, startedAt);
 
-        List<String> rawTargets = batchProperties.targetRegions();
+        List<String> rawTargets = resolveRawTargets();
         if (rawTargets.isEmpty()) {
-            log.warn("배치 대상 지역이 설정되지 않음 - spotscore.batch.target-regions 확인 필요");
+            log.warn("배치 대상 지역이 설정되지 않음 - spotscore.batch.target-regions도 비어있고, " +
+                    "REGION 테이블에도 sgisAdmCd가 매핑된 지역이 없음");
         }
 
         int regionsCollected = 0;
@@ -147,6 +148,30 @@ public class MonthlyDataCollectionBatchJob {
 
         return new BatchResult(rawTargets.size(), regionsCollected, regionsSkipped,
                 populationRowsSaved, storeCountRowsSaved, ageStatRowsSaved, elapsedMillis);
+    }
+
+    // spotscore.batch.target-regions(환경변수)는 dev처럼 소수 지역만 도는 로컬
+    // 테스트용 override로 남겨두되, 값이 없으면(prod처럼 서울 전체를 대상으로 할
+    // 때) REGION 테이블에서 직접 조회해 구성한다 - "sgisAdmCd:adongCd" 쌍을
+    // 426개씩 환경변수 문자열로 나열하는 건 그 자체로 CLAUDE.md 확장성 원칙 2
+    // ("지역을 하드코딩하지 않는다")를 어기는 것이라, RegionCrosswalkRebuildService가
+    // 이미 채워둔 region.sgisAdmCd를 그대로 재사용한다(#9).
+    List<String> resolveRawTargets() {
+        List<String> configured = batchProperties.targetRegions();
+        if (!configured.isEmpty()) {
+            log.info("배치 대상 지역 - 설정값(spotscore.batch.target-regions) {}건 사용", configured.size());
+            return configured;
+        }
+
+        List<Region> regionsWithCrosswalk = regionRepository.findAllBySgisAdmCdIsNotNull();
+        if (regionsWithCrosswalk.isEmpty()) {
+            return List.of();
+        }
+        log.info("배치 대상 지역 - spotscore.batch.target-regions 미설정, REGION 테이블의 sgisAdmCd 매핑 " +
+                "{}건을 배치 대상으로 사용", regionsWithCrosswalk.size());
+        return regionsWithCrosswalk.stream()
+                .map(region -> region.getSgisAdmCd() + ":" + region.getRegionCode())
+                .toList();
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
