@@ -131,6 +131,22 @@ npm run dev                   # http://localhost:5173 (Kakao Map 키가 이 도�
 
 전체 요청/응답 스키마는 Swagger UI에서 확인.
 
+## 연령적합도(ageScore) 노출 기준
+
+상세 패널의 연령적합도 카드는 모든 업종에 뜨는 게 아니라 **업종별 방향성(`industry_age_direction`)** 에 따라 갈린다.
+
+- 방향성은 `industry_category.industry_code`의 **대분류 접두어**로 정해진다(설정: `spotscore.industry.age-direction.positive-prefixes`/`negative-prefixes`, 기본값 아래).
+  코드에 업종을 하드코딩하지 않고 시딩 시점에 계산한다(`IndustryAgeDirectionSeedingService`).
+
+  | 접두어 | 방향 | 의미 | 카드 노출 |
+  | --- | --- | --- | --- |
+  | `I2`(외식) / `R1`(스포츠·오락) / `P1`(교육) | POSITIVE | 20~39세 비율이 높을수록 유리 | 뜸 |
+  | `Q1`(보건의료) | NEGATIVE | 고령층 비율이 높을수록 유리 | 뜸 |
+  | 그 외 전부 | NEUTRAL | 연령 구성과 무관 | **안 뜸** (DOM에 없음, 빈 카드 아님) |
+
+- POSITIVE/NEGATIVE 업종이라도, 해당 지역의 인구가 100명 미만이거나 KOSIS 원자료가 아직 수집되지 않았으면 카드는 뜨되 "데이터 부족" placeholder로 표시된다(0점이 아님 — `AgeScoreService` 참고).
+- 프론트(`RegionIndustryDetailPanel.tsx`)는 위 접두어를 알지 못하고, API가 내려주는 최상위 `ageDirection` 필드(POSITIVE/NEGATIVE/null)만 보고 렌더링 여부를 결정한다 — 업종 코드를 프론트에 하드코딩하지 않기 위함(아래 확장성 설계 원칙 2).
+
 ## 확장성 설계 원칙
 
 1. 데이터 수집기는 `DataCollector` 인터페이스로 분리 — 새 API 소스는 구현체만 추가
