@@ -1,0 +1,9 @@
+.gradle
+build/
+.idea/
+.vscode/
+out/
+*.log
+.env
+.env.example
+backend-run.log
