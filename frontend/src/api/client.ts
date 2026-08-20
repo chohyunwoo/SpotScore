@@ -33,3 +33,24 @@ export async function fetchJson<T>(path: string): Promise<T> {
 
   return JSON.parse(text) as T;
 }
+
+/** POST 요청 헬퍼 — fetchJson과 동일한 에러/빈 바디 처리 규칙을 따른다. */
+export async function postJson<T>(path: string, body: unknown): Promise<T> {
+  const url = `${API_BASE_URL}${path}`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    throw new ApiError(response.status, `API 요청 실패: ${response.status} ${response.statusText} (${url})`);
+  }
+
+  const text = await response.text();
+  if (text.length === 0) {
+    return undefined as T;
+  }
+
+  return JSON.parse(text) as T;
+}

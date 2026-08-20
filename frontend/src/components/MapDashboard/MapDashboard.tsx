@@ -5,6 +5,7 @@ import { useStores } from '../../api/stores';
 import { useSelection } from '../../context/SelectionContext';
 import { IndustrySelector } from '../IndustrySelector/IndustrySelector';
 import { RegionIndustryDetailPanel } from '../RegionIndustryDetailPanel/RegionIndustryDetailPanel';
+import { ChatWidget } from '../ChatWidget/ChatWidget';
 import { RegionSearchBox } from '../RegionSearchBox/RegionSearchBox';
 import {
   ATTRACTIVENESS_TIER_ICON,
@@ -629,6 +630,8 @@ export function MapDashboard() {
         <SlidePanel $open={Boolean(regionCode && industryCode)} aria-hidden={!regionCode}>
           <RegionIndustryDetailPanel />
         </SlidePanel>
+
+        <ChatWidget industryCode={industryCode} regionCode={regionCode} />
       </MapCanvasArea>
     </Layout>
   );

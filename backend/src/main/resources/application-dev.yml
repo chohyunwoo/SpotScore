@@ -50,6 +50,26 @@ spotscore:
     # MVP 범위(서울) 루트 코드 - 전국 대응 시 이 값만 바꾸면 된다(CLAUDE.md 확장성 원칙).
     root-adm-cd: ${SPOTSCORE_DISCOVERY_ROOT_ADM_CD:11}
     signgu-sample-pages: ${SPOTSCORE_DISCOVERY_SIGNGU_SAMPLE_PAGES:20}
+  groq:
+    # 창업 상담 챗봇(tool-calling) - SGIS/상권정보와 달리 공공데이터가 아니라
+    # 별도 카테고리(CLAUDE.md 확정 기술 스택 참고). Groq는 OpenAI 호환 엔드포인트를
+    # 무료 티어로 제공해 2026-08 OpenAI에서 전환(저트래픽 포트폴리오 데모에 적합).
+    # API_KEY 미설정 시 ChatService가 요청을 처리하지 않고 안내 메시지만 반환한다.
+    base-url: https://api.groq.com/openai/v1
+    api-key: ${GROQ_API_KEY:}
+    # 무료 티어에서 tool calling을 지원하는 모델 - Groq가 호스팅 모델을 주기적으로
+    # 교체하므로(실제로 llama-3.3-70b-versatile이 2026-08 배포 직후 이미 404로
+    # 사라진 것을 확인함) 만료되면 GET /openai/v1/models 응답의 supported_features에
+    # "tools"가 있는 모델로 교체할 것(https://console.groq.com/docs/models 참고).
+    model: ${GROQ_MODEL:openai/gpt-oss-120b}
+    # 후보 지역을 여러 곳 비교하는 질문은 4회로도 부족한 것이 실측으로 확인됨(2026-08) -
+    # 여유를 두되, 그래도 다 쓰면 ChatService가 tool 없이 마지막 답변을 강제 생성한다.
+    max-tool-iterations: ${GROQ_MAX_TOOL_ITERATIONS:6}
+    # gpt-oss-120b는 reasoning(생각 과정) 토큰을 답변 본문(content)과 별도로 소비한다 -
+    # 600으로는 계산식 설명처럼 긴 답변에서 reasoning이 예산을 다 써버려 content가
+    # 빈 문자열로 오는 것이 실제로 확인됨(2026-08). 여유를 두어 1500으로 상향.
+    max-tokens: ${GROQ_MAX_TOKENS:1500}
+    timeout-seconds: ${GROQ_TIMEOUT_SECONDS:30}
 
 logging:
   level:

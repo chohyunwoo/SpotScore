@@ -171,3 +171,24 @@ export interface StoreItem {
   lon: number | null;
   lat: number | null;
 }
+
+/**
+ * POST /api/v1/chat 요청/응답 바디 (ChatController/ChatService 확인). 서버는 대화
+ * 상태를 저장하지 않으므로 매 요청마다 프론트가 전체 이력을 함께 보낸다 —
+ * ChatWidget의 로컬 state가 유일한 저장소.
+ */
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface ChatRequest {
+  messages: ChatMessage[];
+  /** SelectionContext의 현재 선택값을 참고용 힌트로 전달 — 서버가 강제하지 않음. */
+  industryCode: string | null;
+  regionCode: string | null;
+}
+
+export interface ChatResponse {
+  reply: string;
+}

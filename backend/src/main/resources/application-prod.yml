@@ -32,6 +32,16 @@ spotscore:
   discovery:
     root-adm-cd: ${SPOTSCORE_DISCOVERY_ROOT_ADM_CD:}
     signgu-sample-pages: ${SPOTSCORE_DISCOVERY_SIGNGU_SAMPLE_PAGES:20}
+  groq:
+    base-url: https://api.groq.com/openai/v1
+    # SGIS/상권정보/KOSIS와 달리 미설정 시 fail-fast(부팅 실패)시키지 않는다 - 챗봇은
+    # 핵심 점수 계산 파이프라인과 무관한 선택적 부가 기능이라, 키가 없으면
+    # ChatService가 요청 단위로 안내 메시지만 반환하고 나머지 서비스는 정상 동작해야 한다.
+    api-key: ${GROQ_API_KEY:}
+    model: ${GROQ_MODEL:openai/gpt-oss-120b}
+    max-tool-iterations: ${GROQ_MAX_TOOL_ITERATIONS:6}
+    max-tokens: ${GROQ_MAX_TOKENS:1500}
+    timeout-seconds: ${GROQ_TIMEOUT_SECONDS:30}
 
 logging:
   level:

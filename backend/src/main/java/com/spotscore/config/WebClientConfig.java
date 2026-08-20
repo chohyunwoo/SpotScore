@@ -2,11 +2,14 @@ package com.spotscore.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.util.DefaultUriBuilderFactory;
 import reactor.netty.http.client.HttpClient;
+
+import java.time.Duration;
 
 @Configuration
 public class WebClientConfig {
@@ -53,6 +56,22 @@ public class WebClientConfig {
         return WebClient.builder()
                 .uriBuilderFactory(uriBuilderFactory)
                 .exchangeStrategies(exchangeStrategies)
+                .build();
+    }
+
+    @Bean
+    public WebClient groqWebClient(GroqProperties properties) {
+        // Groq(OpenAI 호환 엔드포인트)는 SGIS처럼 별도 accessToken 발급 단계가 없다 -
+        // 매 요청에 동일한 Authorization 헤더만 필요하므로 SgisAuthService 같은 토큰
+        // 캐싱 컴포넌트 없이 빈 생성 시점에 헤더를 고정한다. responseTimeout은
+        // tool-calling 루프가 여러 번 왕복할 수 있어 기본 타임아웃보다 넉넉하게
+        // 설정값으로 분리한다.
+        HttpClient httpClient = HttpClient.create()
+                .responseTimeout(Duration.ofSeconds(properties.timeoutSeconds()));
+        return WebClient.builder()
+                .baseUrl(properties.baseUrl())
+                .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + properties.apiKey())
+                .clientConnector(new ReactorClientHttpConnector(httpClient))
                 .build();
     }
 }
