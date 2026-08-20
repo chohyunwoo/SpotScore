@@ -10,6 +10,7 @@ import org.springframework.transaction.TransactionException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -37,6 +38,18 @@ public class GlobalExceptionHandler {
         log.warn("리소스를 찾을 수 없음 - path: {}, message: {}", request.getRequestURI(), ex.getMessage());
         ErrorResponse body = ErrorResponse.of(
                 HttpStatus.NOT_FOUND.value(), "RESOURCE_NOT_FOUND", ex.getMessage(), request.getRequestURI());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
+    }
+
+    // 이 백엔드는 정적 파일을 서빙하지 않는 순수 API 서버라, 브라우저가 "/"나
+    // "/favicon.ico"를 요청하면 스프링이 정적 리소스 핸들러에서 못 찾고 이 예외를
+    // 던진다 - 실제 서버 오류가 아니라 단순 404이므로 catch-all 500 핸들러가 아니라
+    // 여기서 먼저 잡아 404로 내려준다(Render 배포 후 실사용 중 발견, 2026-08).
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ErrorResponse> handleNoResourceFoundException(NoResourceFoundException ex, HttpServletRequest request) {
+        log.warn("정적 리소스 없음 - path: {}", request.getRequestURI());
+        ErrorResponse body = ErrorResponse.of(
+                HttpStatus.NOT_FOUND.value(), "RESOURCE_NOT_FOUND", "요청한 경로를 찾을 수 없습니다.", request.getRequestURI());
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
     }
 
