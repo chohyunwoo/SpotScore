@@ -3,15 +3,15 @@ import { fetchJson } from './client';
 import type { ScoreWeightConfig } from '../types/domain';
 
 /**
- * GET /api/v1/admin/score-weights. 이름 그대로 관리자용 엔드포인트지만(인증 미적용
- * TODO 상태, ScoreWeightAdminController 참고), 가중치 값을 프론트가 하드코딩하지
- * 않고 노출할 수 있는 유일한 API라 수요/공급 카드의 가중치 안내 문구에 그대로 쓴다.
+ * GET /api/v1/scores/weights — 가중치 값을 프론트가 하드코딩하지 않고 노출할 수 있는
+ * 공개 읽기 전용 API(ScoreController 참고). 값 변경(PUT /api/v1/admin/score-weights/{key})은
+ * 여전히 X-Admin-Api-Key로 보호되지만, 조회는 비밀 정보가 아니라 인증 없이 공개한다(이슈 #17).
  * 가중치는 배치 재계산 전에는 잘 안 바뀌는 값이라 staleTime을 길게 둔다.
  */
 export function useScoreWeights() {
   return useQuery({
-    queryKey: ['admin', 'score-weights'],
-    queryFn: () => fetchJson<ScoreWeightConfig[]>('/api/v1/admin/score-weights'),
+    queryKey: ['score-weights'],
+    queryFn: () => fetchJson<ScoreWeightConfig[]>('/api/v1/scores/weights'),
     staleTime: 5 * 60 * 1000,
   });
 }
