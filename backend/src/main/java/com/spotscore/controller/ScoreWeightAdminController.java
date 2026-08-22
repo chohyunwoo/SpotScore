@@ -23,8 +23,11 @@ import java.util.List;
  * 조회/수정할 뿐이다(ScoreWeightAdminService 참고).
  *
  * /api/v1/admin/**은 AdminApiKeyInterceptor가 X-Admin-Api-Key 헤더로 보호한다(WebConfig 참고).
+ * 프론트가 "점수 근거 공개" 문구에 쓰는 읽기 전용 조회는 이 admin 엔드포인트가 아니라
+ * 공개 엔드포인트 GET /api/v1/scores/weights(ScoreController)를 쓴다 - 조회는 비밀
+ * 정보가 아니므로 값 변경(이 컨트롤러)만 인증 대상으로 남긴다(이슈 #17).
  */
-@Tag(name = "ScoreWeightAdmin", description = "AHP 가중치 설정 조회/수정 (X-Admin-Api-Key 필요)")
+@Tag(name = "ScoreWeightAdmin", description = "AHP 가중치 설정 조회/수정 (X-Admin-Api-Key 필요, 공개 조회는 GET /api/v1/scores/weights 참고)")
 @RestController
 @RequestMapping("/api/v1/admin/score-weights")
 public class ScoreWeightAdminController {
