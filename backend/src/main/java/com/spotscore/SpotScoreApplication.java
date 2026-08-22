@@ -1,5 +1,6 @@
 package com.spotscore;
 
+import com.spotscore.config.AdminSecurityProperties;
 import com.spotscore.config.BatchProperties;
 import com.spotscore.config.CorsProperties;
 import com.spotscore.config.DiscoveryProperties;
@@ -16,7 +17,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 @EnableConfigurationProperties({SgisProperties.class, StoreZoneProperties.class, BatchProperties.class,
         CorsProperties.class, DiscoveryProperties.class, FeaturedIndustryProperties.class, KosisProperties.class,
-        IndustryAgeDirectionProperties.class, GroqProperties.class})
+        IndustryAgeDirectionProperties.class, GroqProperties.class, AdminSecurityProperties.class})
 @EnableScheduling
 @SpringBootApplication
 public class SpotScoreApplication {

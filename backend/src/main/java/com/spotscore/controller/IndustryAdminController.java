@@ -13,11 +13,10 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 업종 관련 관리용 작업 수동 트리거.
- *
- * TODO: 운영 배포 전 인증 추가 필요 - 현재는 로컬 전용으로 인증 없이 열려 있다.
+ * 업종 관련 관리용 작업 수동 트리거. /api/v1/admin/**은 AdminApiKeyInterceptor가
+ * X-Admin-Api-Key 헤더로 보호한다(WebConfig 참고).
  */
-@Tag(name = "IndustryAdmin", description = "추천 업종(featured) 시딩 등 관리용 작업 수동 트리거")
+@Tag(name = "IndustryAdmin", description = "추천 업종(featured) 시딩 등 관리용 작업 수동 트리거 (X-Admin-Api-Key 필요)")
 @RestController
 public class IndustryAdminController {
 
