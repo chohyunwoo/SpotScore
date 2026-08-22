@@ -77,7 +77,7 @@ frontend/  React (Vite, TypeScript)
 ### 2. 환경 변수
 
 ```bash
-cp backend/.env.example backend/.env    # SGIS/상권정보 키, DB 자격증명 입력
+cp backend/.env.example backend/.env    # SGIS/상권정보/KOSIS 키, DB 자격증명, ADMIN_API_KEY 입력
 cp frontend/.env.example frontend/.env  # API base URL, Kakao Map 키 입력
 ```
 
@@ -96,11 +96,15 @@ docker compose up -d          # PostgreSQL (Flyway가 기동 시 자동 마이�
 
 ### 4. 초기 시딩 + 배치 실행 (최초 1회)
 
+`/api/v1/admin/**`은 `X-Admin-Api-Key` 헤더 인증이 필요하다(`.env`의 `ADMIN_API_KEY` 값, 미설정 시 dev는 모든 admin 요청이 401로 차단되고 prod는 부팅 자체가 실패한다).
+
 ```bash
-curl -X POST http://localhost:8080/api/v1/admin/industries/seed-featured   # 업종 드롭다운 노출(featured) 시딩
-curl -X POST http://localhost:8080/api/v1/admin/industries/seed-age-direction  # 업종별 연령적합도 방향성(POSITIVE/NEGATIVE/NEUTRAL) 시딩
-curl -X POST http://localhost:8080/api/v1/admin/batch/run                  # SGIS/상권정보/KOSIS 수집 + 점수 계산
-curl -X POST http://localhost:8080/api/v1/admin/regions/seed-coordinates  # 지도 마커용 좌표 시딩
+export ADMIN_API_KEY=여기에_env의_ADMIN_API_KEY_값
+
+curl -X POST http://localhost:8080/api/v1/admin/industries/seed-featured -H "X-Admin-Api-Key: $ADMIN_API_KEY"   # 업종 드롭다운 노출(featured) 시딩
+curl -X POST http://localhost:8080/api/v1/admin/industries/seed-age-direction -H "X-Admin-Api-Key: $ADMIN_API_KEY"  # 업종별 연령적합도 방향성(POSITIVE/NEGATIVE/NEUTRAL) 시딩
+curl -X POST http://localhost:8080/api/v1/admin/batch/run -H "X-Admin-Api-Key: $ADMIN_API_KEY"                  # SGIS/상권정보/KOSIS 수집 + 점수 계산
+curl -X POST http://localhost:8080/api/v1/admin/regions/seed-coordinates -H "X-Admin-Api-Key: $ADMIN_API_KEY"  # 지도 마커용 좌표 시딩
 ```
 
 ### 5. 프론트엔드 실행
@@ -115,21 +119,22 @@ npm run dev                   # http://localhost:5173 (Kakao Map 키가 이 도�
 
 ## 주요 API
 
-| Method | Endpoint | 설명 |
-| --- | --- | --- |
-| GET | `/api/v1/industries` | 업종 목록 (기본 featured=true 30개, `?all=true`로 전체) |
-| GET | `/api/v1/scores/ranking?industryCode=` | 업종별 지역 랭킹 (점수·퍼센타일·좌표) |
-| GET | `/api/v1/scores/detail?regionCode=&industryCode=` | 지역×업종 상세 (종합 점수 + 브레이크다운, 업종에 따라 연령적합도 포함) |
-| POST | `/api/v1/admin/batch/run` | 배치 즉시 실행 |
-| POST | `/api/v1/admin/regions/seed-coordinates` | 지역 좌표(위경도) 시딩 |
-| POST | `/api/v1/admin/regions/discover-seoul` | 서울 행정동 크로스워크 탐색 |
-| POST | `/api/v1/admin/regions/rebuild-crosswalk` | 행정구역 코드 크로스워크 재구축 |
-| POST | `/api/v1/admin/scores/recalculate` | 점수 재계산 |
-| GET | `/api/v1/admin/score-weights` | AHP 가중치 설정 조회 |
-| POST | `/api/v1/admin/industries/seed-featured` | 업종 드롭다운 노출(featured) 목록 시딩 |
-| POST | `/api/v1/admin/industries/seed-age-direction` | 업종별 연령적합도 방향성(POSITIVE/NEGATIVE/NEUTRAL) 시딩 |
+| Method | Endpoint | 인증 | 설명 |
+| --- | --- | --- | --- |
+| GET | `/api/v1/industries` | 공개 | 업종 목록 (기본 featured=true 30개, `?all=true`로 전체) |
+| GET | `/api/v1/scores/ranking?industryCode=` | 공개 | 업종별 지역 랭킹 (점수·퍼센타일·좌표) |
+| GET | `/api/v1/scores/detail?regionCode=&industryCode=` | 공개 | 지역×업종 상세 (종합 점수 + 브레이크다운, 업종에 따라 연령적합도 포함) |
+| GET | `/api/v1/scores/weights` | 공개 | AHP 가중치 설정 조회 (읽기 전용 — 상세 패널의 가중치 안내 문구가 사용) |
+| POST | `/api/v1/admin/batch/run` | `X-Admin-Api-Key` | 배치 즉시 실행 |
+| POST | `/api/v1/admin/regions/seed-coordinates` | `X-Admin-Api-Key` | 지역 좌표(위경도) 시딩 |
+| POST | `/api/v1/admin/regions/discover-seoul` | `X-Admin-Api-Key` | 서울 행정동 크로스워크 탐색 |
+| POST | `/api/v1/admin/regions/rebuild-crosswalk` | `X-Admin-Api-Key` | 행정구역 코드 크로스워크 재구축 |
+| POST | `/api/v1/admin/scores/recalculate` | `X-Admin-Api-Key` | 점수 재계산 |
+| GET/PUT | `/api/v1/admin/score-weights[/{key}]` | `X-Admin-Api-Key` | AHP 가중치 조회(레거시, 공개 조회는 위 `/api/v1/scores/weights` 참고)/수정 |
+| POST | `/api/v1/admin/industries/seed-featured` | `X-Admin-Api-Key` | 업종 드롭다운 노출(featured) 목록 시딩 |
+| POST | `/api/v1/admin/industries/seed-age-direction` | `X-Admin-Api-Key` | 업종별 연령적합도 방향성(POSITIVE/NEGATIVE/NEUTRAL) 시딩 |
 
-전체 요청/응답 스키마는 Swagger UI에서 확인.
+`X-Admin-Api-Key`가 필요한 엔드포인트는 헤더 값이 `.env`의 `ADMIN_API_KEY`와 일치해야 하며, 없거나 틀리면 401을 반환한다. 전체 요청/응답 스키마는 Swagger UI에서 확인.
 
 ## 연령적합도(ageScore) 노출 기준
 

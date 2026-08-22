@@ -167,6 +167,13 @@ SCORE_CACHE(regionCode FK, industryCode FK, totalScore, populationScore, househo
 - `GET /api/v1/industries` → `[{ industryCode, industryName }]` (level 필드 없음)
 - `GET /api/v1/scores/ranking?industryCode=` → `[{ regionCode, regionName, totalScore, populationScore, householdScore, densityScore, latitude, longitude, percentileRank, attractivenessTier }]` (flat, `householdScore`는 NOT NULL, `latitude`/`longitude`는 V6 시딩 완료 지역만 값 있음). 데이터 없으면 빈 배열을 200으로 반환(에러 아님).
 - `GET /api/v1/scores/detail?regionCode=&industryCode=` → `{ regionName, industryName, totalScore, populationStat: {...}, competitionStat: {...} }` (regionName/industryName은 최상위 flat). `populationStat`**/**`competitionStat`**은 객체 전체가 null일 수 있음** — 프론트는 반드시 옵셔널 체이닝으로 처리. `populationStat.householdCount`/`avgHouseholdSize`는 여전히 nullable(V2가 NOT NULL 승격 안 함).
+- `GET /api/v1/scores/weights` → `[{ weightKey, weightValue, weightGroup }]` (공개, 인증 불필요) — `SCORE_WEIGHT_CONFIG` 전체를 그대로 반환. 상세 패널의 가중치 안내 문구가 이 엔드포인트를 쓴다. 값 변경은 아래 admin 인증이 걸린 `PUT /api/v1/admin/score-weights/{weightKey}`에서만 가능(2026-08, 이슈 #17).
+
+## Admin API 인증 (2026-08 추가)
+
+`/api/v1/admin/**`(배치 트리거, 지역/업종 시딩, 점수 재계산, 가중치 수정)는 배포 후에도 인증 없이 열려 있던 게 발견돼(이슈 #15) `X-Admin-Api-Key` 헤더 인증을 추가했다. 헤더 값이 `spotscore.admin.api-key`(환경변수 `ADMIN_API_KEY`)와 일치해야 하며, 불일치·누락 시 401(`ErrorResponse` 포맷)을 반환한다. 키가 아예 설정 안 되어 있으면 dev는 모든 admin 요청을 차단(CORS 미설정 시 처리와 동일한 fail-closed 원칙), prod는 기본값 없이 필수라 미설정 시 부팅 자체가 실패한다(SGIS/상권정보/KOSIS 키와 동일한 컨벤션).
+
+⚠️ **가중치 "조회"는 이 인증 대상이 아니다**: 프론트가 조회용으로 admin 엔드포인트에 편승해 쓰고 있던 게 발견돼(이슈 #17), 조회는 위 `GET /api/v1/scores/weights`로 공개 분리했다. `/api/v1/admin/score-weights`(GET)는 레거시로 남아있고 여전히 인증이 걸려 있다 — 새 코드는 공개 엔드포인트를 쓸 것.
 
 ## 점수 해석 기준 (확정) — 퍼센타일 밴드
 
