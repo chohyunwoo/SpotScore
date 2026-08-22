@@ -266,6 +266,7 @@ project/
 - SGIS 통계값 5 이하 비공개(N/A) 케이스 처리 방식(0 처리 vs 제외)
 - 상권업종분류 vs 표준산업분류 불일치 시 업종 통일 기준
 - ~~종합 점수 가중치~~ — **확정 완료** (인구규모 0.50 / 가구구조 0.17 / 경쟁밀집도 0.33) — 이 수치는 v1(폐기됨), 최종은 바로 위 "가중치 산출 방법(v2 확정)" 섹션의 0.375/0.125/0.5로 대신함. `SCORE_WEIGHT_CONFIG` 시딩도 완료 확인(`GET /api/v1/admin/score-weights` 실호출로 AGE_WEIGHT 0.25/CORE_WEIGHT 0.75/DEMAND_WEIGHT 0.5/HOUSEHOLD_RATIO 0.25/POPULATION_RATIO 0.75/SUPPLY_WEIGHT 0.5 전부 확인, 2026-08-14).
+  - ⚠️ **stale 주석 주의(2026-08-22 확인)**: `V4__seed_ahp_hierarchy_weight_config.sql` 파일 내부 주석에는 "TODO(미확정): 아래 값은 팀 쌍대비교 진행 전 임시값(5:5/5:5)"이라고 적혀 있으나, 이는 V4 적용 시점 기준 설명이고 이후 `V11__add_directional_age_weight_and_fix_ahp_ratio.sql`이 `DEMAND_POPULATION_RATIO`/`DEMAND_HOUSEHOLD_RATIO`(0.5/0.5)를 확정치인 `POPULATION_RATIO`/`HOUSEHOLD_RATIO`(0.75/0.25, Saaty 3)로 실제로 교체하며 이미 지나간 이력이 됐다. 적용된 마이그레이션은 사후 수정하지 않는 원칙(`DB_스키마_변경_관리_가이드.md`)상 V4 주석은 그대로 두지만, **가중치 확정 여부는 반드시 최신 마이그레이션(V11) 또는 실제 DB/API 값 기준으로 판단할 것** — V4 주석만 보고 "아직 미확정"이라고 오판하지 말 것. (이 오판으로 이력서·포트폴리오에 "현재 값은 잠정치" 문구가 잘못 들어간 사고가 실제로 있었음, 2026-08-22 발견·수정.)
 - `populationStat.householdCount`~~/~~`avgHouseholdSize` ~~nullable 여부~~ — **해소됨**: 서울 전체(426개) 재검증 결과 null 비율 0%
 
 ## 1개월 마일스톤
