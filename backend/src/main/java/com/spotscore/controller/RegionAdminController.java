@@ -16,11 +16,10 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 지역 좌표 시딩 및 서울 전체 매핑 발견 등 관리용 작업 수동 트리거.
- *
- * TODO: 운영 배포 전 인증 추가 필요 - 현재는 로컬 전용으로 인증 없이 열려 있다.
+ * 지역 좌표 시딩 및 서울 전체 매핑 발견 등 관리용 작업 수동 트리거. /api/v1/admin/**은
+ * AdminApiKeyInterceptor가 X-Admin-Api-Key 헤더로 보호한다(WebConfig 참고).
  */
-@Tag(name = "RegionAdmin", description = "지역 좌표 시딩/서울 전체 매핑 발견 등 관리용 작업 수동 트리거")
+@Tag(name = "RegionAdmin", description = "지역 좌표 시딩/서울 전체 매핑 발견 등 관리용 작업 수동 트리거 (X-Admin-Api-Key 필요)")
 @RestController
 public class RegionAdminController {
 

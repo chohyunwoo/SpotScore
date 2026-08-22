@@ -50,6 +50,11 @@ spotscore:
     # MVP 범위(서울) 루트 코드 - 전국 대응 시 이 값만 바꾸면 된다(CLAUDE.md 확장성 원칙).
     root-adm-cd: ${SPOTSCORE_DISCOVERY_ROOT_ADM_CD:11}
     signgu-sample-pages: ${SPOTSCORE_DISCOVERY_SIGNGU_SAMPLE_PAGES:20}
+  admin:
+    # /api/v1/admin/** 보호용 공유 API Key. 요청 헤더 X-Admin-Api-Key로 제시해야 함
+    # (AdminApiKeyInterceptor 참고). 비어 있으면 admin 요청을 전부 차단한다(fail-closed) -
+    # .env에 값을 설정해야 로컬에서 admin 엔드포인트를 테스트할 수 있다.
+    api-key: ${ADMIN_API_KEY:}
   groq:
     # 창업 상담 챗봇(tool-calling) - SGIS/상권정보와 달리 공공데이터가 아니라
     # 별도 카테고리(CLAUDE.md 확정 기술 스택 참고). Groq는 OpenAI 호환 엔드포인트를

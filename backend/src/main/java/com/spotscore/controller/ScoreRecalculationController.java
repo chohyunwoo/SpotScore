@@ -21,9 +21,9 @@ import java.time.LocalDate;
  * 트래픽을 발생시킨다. year/snapshotDate는 재계산 대상 원자료가 실제로 적재된
  * 값과 일치해야 한다(다르면 ScoreCalculationService가 WARN 로그 후 0건 처리하고 끝난다).
  *
- * TODO: 운영 배포 전 인증 추가 필요 - 현재는 로컬 전용으로 인증 없이 열려 있다.
+ * /api/v1/admin/**은 AdminApiKeyInterceptor가 X-Admin-Api-Key 헤더로 보호한다(WebConfig 참고).
  */
-@Tag(name = "ScoreRecalculation", description = "가중치 변경 후 SCORE_CACHE만 재계산 (원자료 재수집 없음)")
+@Tag(name = "ScoreRecalculation", description = "가중치 변경 후 SCORE_CACHE만 재계산 (원자료 재수집 없음, X-Admin-Api-Key 필요)")
 @RestController
 public class ScoreRecalculationController {
 

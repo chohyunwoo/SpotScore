@@ -1,6 +1,7 @@
 package com.spotscore.config;
 
 import com.spotscore.logging.RequestTimingInterceptor;
+import com.spotscore.security.AdminApiKeyInterceptor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Configuration;
@@ -15,15 +16,19 @@ public class WebConfig implements WebMvcConfigurer {
 
     private final CorsProperties corsProperties;
     private final RequestTimingInterceptor requestTimingInterceptor;
+    private final AdminApiKeyInterceptor adminApiKeyInterceptor;
 
-    public WebConfig(CorsProperties corsProperties, RequestTimingInterceptor requestTimingInterceptor) {
+    public WebConfig(CorsProperties corsProperties, RequestTimingInterceptor requestTimingInterceptor,
+                      AdminApiKeyInterceptor adminApiKeyInterceptor) {
         this.corsProperties = corsProperties;
         this.requestTimingInterceptor = requestTimingInterceptor;
+        this.adminApiKeyInterceptor = adminApiKeyInterceptor;
     }
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(requestTimingInterceptor).addPathPatterns("/api/v1/**");
+        registry.addInterceptor(adminApiKeyInterceptor).addPathPatterns("/api/v1/admin/**");
     }
 
     @Override

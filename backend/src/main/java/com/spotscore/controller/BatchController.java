@@ -17,8 +17,9 @@ import java.time.LocalDate;
 /**
  * 운영용 배치 수동 트리거. 월 1회 스케줄 실행과 동일한 로직을 즉시 1회 실행한다
  * (데모/장애 재처리 목적) - CLAUDE.md API 버전 프리픽스 원칙에 따라 /api/v1 하위에 둔다.
+ * /api/v1/admin/**은 AdminApiKeyInterceptor가 X-Admin-Api-Key 헤더로 보호한다(WebConfig 참고).
  */
-@Tag(name = "Batch", description = "데이터 수집/점수 계산 배치 수동 트리거")
+@Tag(name = "Batch", description = "데이터 수집/점수 계산 배치 수동 트리거 (X-Admin-Api-Key 필요)")
 @RestController
 public class BatchController {
 

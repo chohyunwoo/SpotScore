@@ -22,9 +22,9 @@ import java.util.List;
  * 수 있게 한다. 가중치 수치 자체는 여기서 정하지 않고 DB에 이미 있는 값을 그대로
  * 조회/수정할 뿐이다(ScoreWeightAdminService 참고).
  *
- * TODO: 운영 배포 전 인증 추가 필요 - 현재는 로컬 전용으로 인증 없이 열려 있다.
+ * /api/v1/admin/**은 AdminApiKeyInterceptor가 X-Admin-Api-Key 헤더로 보호한다(WebConfig 참고).
  */
-@Tag(name = "ScoreWeightAdmin", description = "AHP 가중치 설정 조회/수정 (인증 미적용 - 로컬 전용)")
+@Tag(name = "ScoreWeightAdmin", description = "AHP 가중치 설정 조회/수정 (X-Admin-Api-Key 필요)")
 @RestController
 @RequestMapping("/api/v1/admin/score-weights")
 public class ScoreWeightAdminController {
