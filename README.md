@@ -16,6 +16,7 @@
 | 프론트엔드 | React + TypeScript (Vite) |
 | DB | PostgreSQL (Docker Compose) + Flyway |
 | ORM | Spring Data JPA |
+| 인증 | Spring Security (세션 + HttpOnly 쿠키 — 즐겨찾기용 일반 사용자 로그인) |
 | 외부 API 호출 | WebClient (SGIS + 상권정보 + KOSIS 비동기 병렬 호출) |
 | 배치 | Spring `@Scheduled` (월 1회) |
 | 지도 | Kakao Map JS SDK |
@@ -23,6 +24,7 @@
 | 데이터 페칭 | TanStack Query |
 | 스타일링 | styled-components |
 | API 문서 | Springdoc OpenAPI (Swagger UI) |
+| 배포 | Cloudflare Pages(프론트) · Render(백엔드, Docker) · Supabase(DB) |
 
 ## 데이터 흐름
 
@@ -35,7 +37,7 @@
       ↓
 [API] Spring Boot REST — 랭킹/지도/상세
       ↓
-[프론트] React — 랭킹 리스트 ↔ 지도 ↔ 상세 패널
+[프론트] React — 랭킹 리스트 ↔ 지도 ↔ 상세 패널 (+ 로그인·관심 지역 저장/비교)
 ```
 
 ## 폴더 구조
@@ -50,6 +52,9 @@ backend/   Spring Boot (Gradle)
     domain/      JPA Entity
     repository/  Spring Data JPA Repository
     controller/  REST 컨트롤러 (+ admin/)
+    auth/        회원가입/로그인 서비스 (Spring Security)
+    favorite/    즐겨찾기(관심 지역×업종) 서비스
+    security/    Security 설정 · CSRF · admin API Key 인터셉터
     dto/
   src/main/resources/db/migration/   Flyway 마이그레이션
 
@@ -60,7 +65,11 @@ frontend/  React (Vite, TypeScript)
       IndustrySelector/
       MapDashboard/                Kakao Map + 랭킹 리스트 (양방향 연동)
       RegionIndustryDetailPanel/   Recharts 브레이크다운(수요/공급/연령적합도)
-    context/
+      Auth/                        로그인·회원가입 모달 + 상단 인증바
+      FavoriteStar/                즐겨찾기 별표 토글(랭킹 행·상세 패널)
+      Compare/                     관심 지역 비교 뷰(업종별 그룹)
+    context/                       SelectionContext · AuthContext
+  functions/api/                   Cloudflare Pages Function — 배포 시 /api/* 를 백엔드로 same-origin 프록시
 ```
 
 ## 로컬 실행
@@ -125,6 +134,9 @@ npm run dev                   # http://localhost:5173 (Kakao Map 키가 이 도�
 | GET | `/api/v1/scores/ranking?industryCode=` | 공개 | 업종별 지역 랭킹 (점수·퍼센타일·좌표) |
 | GET | `/api/v1/scores/detail?regionCode=&industryCode=` | 공개 | 지역×업종 상세 (종합 점수 + 브레이크다운, 업종에 따라 연령적합도 포함) |
 | GET | `/api/v1/scores/weights` | 공개 | AHP 가중치 설정 조회 (읽기 전용 — 상세 패널의 가중치 안내 문구가 사용) |
+| POST | `/api/v1/auth/register`, `/login`, `/logout` | 공개(부트스트랩)/세션 | 회원가입 · 로그인 · 로그아웃 (세션 + HttpOnly 쿠키) |
+| GET | `/api/v1/auth/me` | 세션 | 로그인 사용자 정보 (비로그인 401) |
+| GET/POST/DELETE | `/api/v1/favorites`, `/favorites/{id}` | 세션 | 관심 지역×업종 즐겨찾기 목록/추가(멱등)/삭제(본인 소유만) |
 | POST | `/api/v1/admin/batch/run` | `X-Admin-Api-Key` | 배치 즉시 실행 |
 | POST | `/api/v1/admin/regions/seed-coordinates` | `X-Admin-Api-Key` | 지역 좌표(위경도) 시딩 |
 | POST | `/api/v1/admin/regions/discover-seoul` | `X-Admin-Api-Key` | 서울 행정동 크로스워크 탐색 |
@@ -151,6 +163,21 @@ npm run dev                   # http://localhost:5173 (Kakao Map 키가 이 도�
 
 - POSITIVE/NEGATIVE 업종이라도, 해당 지역의 인구가 100명 미만이거나 KOSIS 원자료가 아직 수집되지 않았으면 카드는 뜨되 "데이터 부족" placeholder로 표시된다(0점이 아님 — `AgeScoreService` 참고).
 - 프론트(`RegionIndustryDetailPanel.tsx`)는 위 접두어를 알지 못하고, API가 내려주는 최상위 `ageDirection` 필드(POSITIVE/NEGATIVE/null)만 보고 렌더링 여부를 결정한다 — 업종 코드를 프론트에 하드코딩하지 않기 위함(아래 확장성 설계 원칙 2).
+
+## 사용자 인증 & 즐겨찾기
+
+관심 있는 "지역 × 업종" 조합을 저장하고 여러 후보지를 나란히 비교하기 위해 **세션 + HttpOnly 쿠키 기반 일반 사용자 로그인**(Spring Security)을 도입했다.
+
+- 공개 조회(랭킹/상세/업종/가중치/업소/챗봇)는 로그인 없이 그대로 이용하고, `/api/v1/favorites/**`·`/api/v1/auth/me`만 인증이 필요하다.
+- `/api/v1/admin/**`은 기존 공유 API Key(`X-Admin-Api-Key`)를 그대로 유지 — 세션 로그인과 별개 체계다.
+- 비밀번호는 BCrypt 해시로만 저장한다. 상태를 바꾸는 요청(즐겨찾기 추가/삭제, 로그아웃)은 CSRF 토큰(`XSRF-TOKEN` 쿠키 + `X-XSRF-TOKEN` 헤더, 더블 서밋)이 필요하다.
+- **비교 뷰**는 즐겨찾기 조합들의 상세 점수를 병렬 조회해 브레이크다운(인구/가구/경쟁 여유도/연령)을 나란히 보여준다. 점수는 업종 내 상대값(퍼센타일)이라 서로 다른 업종을 직접 비교하면 오해를 주므로 **업종별로 그룹화**해 같은 업종끼리만 비교하고 최고값을 강조한다.
+
+## 배포
+
+- **프론트** Cloudflare Pages · **백엔드** Render(Docker) · **DB** Supabase PostgreSQL — 모두 무료 티어.
+- **same-origin 프록시**: 프론트와 백엔드가 서로 다른 도메인이면 세션·CSRF 쿠키가 서드파티 쿠키로 취급돼 로그인이 유지되지 않는다. Cloudflare Pages Function(`frontend/functions/api`)이 `/api/*`를 백엔드로 리버스 프록시해 쿠키를 1st-party로 만든다(프론트는 상대경로 `/api/...`로 호출, 배포 빌드에서 `VITE_API_BASE_URL`을 비움).
+- **콜드스타트**: Render 무료 티어는 15분 무활동 시 인스턴스를 내리고 다음 요청은 콜드스타트로 30초~1분 걸린다. GitHub Actions keep-warm 워크플로우가 활동 시간대(KST 10~22시)에 백엔드를 핑해 깨워둔다 — 무료 월 750 instance-hours 한도 안에서 운영하기 위한 절충이라, 심야엔 첫 접속이 느릴 수 있다.
 
 ## 확장성 설계 원칙
 
