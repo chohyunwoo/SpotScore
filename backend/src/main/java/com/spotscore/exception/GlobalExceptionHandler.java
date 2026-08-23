@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.transaction.TransactionException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -75,6 +76,18 @@ public class GlobalExceptionHandler {
         log.warn("요청 바디 검증 실패 - path: {}, message: {}", request.getRequestURI(), message);
         ErrorResponse body = ErrorResponse.of(
                 HttpStatus.BAD_REQUEST.value(), "VALIDATION_ERROR", message, request.getRequestURI());
+        return ResponseEntity.badRequest().body(body);
+    }
+
+    // 요청 바디 자체가 파싱 불가(깨진 JSON/인코딩 등) - 서버 오류(500)가 아니라 잘못된
+    // 요청(400)이므로 여기서 잡아 catch-all 500으로 새는 것을 막는다.
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleHttpMessageNotReadableException(
+            HttpMessageNotReadableException ex, HttpServletRequest request) {
+        log.warn("요청 바디를 읽을 수 없음 - path: {}, message: {}", request.getRequestURI(), ex.getMessage());
+        ErrorResponse body = ErrorResponse.of(
+                HttpStatus.BAD_REQUEST.value(), "MALFORMED_REQUEST_BODY",
+                "요청 본문을 해석할 수 없습니다. 형식을 확인해주세요.", request.getRequestURI());
         return ResponseEntity.badRequest().body(body);
     }
 
