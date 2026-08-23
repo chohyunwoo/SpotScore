@@ -1,4 +1,11 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+/**
+ * API 베이스 URL. 로컬 개발은 .env의 http://localhost:8080을 쓰고, 배포(Cloudflare)에서는
+ * 이 값을 비워(또는 미설정) 상대경로 `/api/...`로 요청하게 한다 — 그러면 프론트와 같은
+ * 오리진의 Cloudflare Pages Function(functions/api)이 백엔드로 리버스 프록시해, 세션/CSRF
+ * 쿠키가 1st-party가 된다(교차 사이트 쿠키 문제 해소). 미설정 시 ''로 폴백해 안전하게
+ * 상대경로가 되도록 한다(undefined면 "undefined/api/..."가 되는 것을 방지).
+ */
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
 
 /**
  * HTTP 상태 코드를 함께 들고 다니는 에러.
