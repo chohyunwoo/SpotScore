@@ -168,6 +168,18 @@ SCORE_CACHE(regionCode FK, industryCode FK, totalScore, populationScore, househo
 - `GET /api/v1/scores/ranking?industryCode=` → `[{ regionCode, regionName, totalScore, populationScore, householdScore, densityScore, latitude, longitude, percentileRank, attractivenessTier }]` (flat, `householdScore`는 NOT NULL, `latitude`/`longitude`는 V6 시딩 완료 지역만 값 있음). 데이터 없으면 빈 배열을 200으로 반환(에러 아님).
 - `GET /api/v1/scores/detail?regionCode=&industryCode=` → `{ regionName, industryName, totalScore, populationStat: {...}, competitionStat: {...} }` (regionName/industryName은 최상위 flat). `populationStat`**/**`competitionStat`**은 객체 전체가 null일 수 있음** — 프론트는 반드시 옵셔널 체이닝으로 처리. `populationStat.householdCount`/`avgHouseholdSize`는 여전히 nullable(V2가 NOT NULL 승격 안 함).
 - `GET /api/v1/scores/weights` → `[{ weightKey, weightValue, weightGroup }]` (공개, 인증 불필요) — `SCORE_WEIGHT_CONFIG` 전체를 그대로 반환. 상세 패널의 가중치 안내 문구가 이 엔드포인트를 쓴다. 값 변경은 아래 admin 인증이 걸린 `PUT /api/v1/admin/score-weights/{weightKey}`에서만 가능(2026-08, 이슈 #17).
+- `POST /api/v1/auth/register` `{ email, password, displayName }` → `{ id, email, displayName }` (201, 이메일 중복 409, 검증 실패 400) / `POST /api/v1/auth/login` → 같은 형태 응답 + 세션 쿠키(JSESSIONID), 자격 증명 실패 401 / `POST /api/v1/auth/logout` → 204 / `GET /api/v1/auth/me` → `{ id, email, displayName }`(비로그인 401). 아래 "사용자 인증 & 즐겨찾기" 섹션 참고(2026-08, 이슈 #19).
+- `GET /api/v1/favorites` → `[{ id, regionCode, regionName, industryCode, industryName, createdAt }]`(로그인 필요) / `POST /api/v1/favorites` `{ regionCode, industryCode }` → `FavoriteResponse`(201, **멱등** — 같은 조합이면 기존 항목 반환, 없는 코드 404) / `DELETE /api/v1/favorites/{favoriteId}` → 204(본인 소유 아니거나 없으면 404). 상태 변경 요청(POST/DELETE/logout)은 `X-XSRF-TOKEN` 헤더 필요(아래 참고).
+
+## 사용자 인증 & 즐겨찾기 (2026-08 추가, 이슈 #19)
+
+즐겨찾기(관심 지역×업종 저장) + 지역 비교 뷰를 위해 **일반 사용자 로그인**을 도입했다(그전엔 로그인 개념이 없었고 admin 공유 API Key만 존재). 방식은 **세션 + HttpOnly 쿠키(Spring Security)** — JWT/OAuth 대비 단일 서버 데모에 구현이 단순하고 토큰이 JS에 노출되지 않아 방어 가능하다고 판단(대안 비교는 노션 "기술 선택 근거" 21절).
+
+- **보안 경계**: 공개 조회(랭킹/상세/업종/가중치/업소/챗봇)는 그대로 `permitAll`, `/api/v1/favorites/**`·`/api/v1/auth/me`만 인증 필요. `/api/v1/admin/**`은 **기존 `AdminApiKeyInterceptor`(공유 API Key)를 그대로 유지** — 세션 로그인과 admin 인증은 별개 체계다(Spring Security는 admin 경로를 `permitAll`로 통과시키고 MVC 인터셉터가 API Key를 강제).
+- **비밀번호**: `BCryptPasswordEncoder` 해시로만 저장(평문 금지). 비밀번호 8~72자(BCrypt 72바이트 한계).
+- **CSRF**: 세션 쿠키 기반이라 CSRF 방어 필요. `XSRF-TOKEN` 쿠키(HttpOnly=false)로 토큰을 내리고 프론트가 `X-XSRF-TOKEN` 헤더로 되돌려보낸다(더블 서밋). 상태 변경(즐겨찾기 추가/삭제, 로그아웃)에만 적용하고 admin(별도 키)·챗봇(공개)·로그인/회원가입(세션 부트스트랩)은 CSRF 제외.
+- **CORS**: 세션 쿠키를 교차 오리진으로 주고받아야 해 `WebConfig`(MVC)가 아니라 `SecurityConfig`의 `CorsConfigurationSource`에서 `allowCredentials(true)`로 처리(허용 오리진 출처는 그대로 `spotscore.cors.allowed-origins`). 프론트 `client.ts`는 모든 요청에 `credentials: 'include'`.
+- **스키마**: `app_user`(Flyway V13), `favorite`(V14, `(user_id, region_code, industry_code)` UNIQUE + FK `ON DELETE CASCADE`). prod는 다른 도메인 간 쿠키 전송 시 세션 쿠키 `SameSite=None; Secure` 설정이 별도로 필요할 수 있음(배포 시 확인).
 
 ## Admin API 인증 (2026-08 추가)
 
