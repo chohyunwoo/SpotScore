@@ -179,7 +179,8 @@ SCORE_CACHE(regionCode FK, industryCode FK, totalScore, populationScore, househo
 - **비밀번호**: `BCryptPasswordEncoder` 해시로만 저장(평문 금지). 비밀번호 8~72자(BCrypt 72바이트 한계).
 - **CSRF**: 세션 쿠키 기반이라 CSRF 방어 필요. `XSRF-TOKEN` 쿠키(HttpOnly=false)로 토큰을 내리고 프론트가 `X-XSRF-TOKEN` 헤더로 되돌려보낸다(더블 서밋). 상태 변경(즐겨찾기 추가/삭제, 로그아웃)에만 적용하고 admin(별도 키)·챗봇(공개)·로그인/회원가입(세션 부트스트랩)은 CSRF 제외.
 - **CORS**: 세션 쿠키를 교차 오리진으로 주고받아야 해 `WebConfig`(MVC)가 아니라 `SecurityConfig`의 `CorsConfigurationSource`에서 `allowCredentials(true)`로 처리(허용 오리진 출처는 그대로 `spotscore.cors.allowed-origins`). 프론트 `client.ts`는 모든 요청에 `credentials: 'include'`.
-- **스키마**: `app_user`(Flyway V13), `favorite`(V14, `(user_id, region_code, industry_code)` UNIQUE + FK `ON DELETE CASCADE`). prod는 다른 도메인 간 쿠키 전송 시 세션 쿠키 `SameSite=None; Secure` 설정이 별도로 필요할 수 있음(배포 시 확인).
+- **스키마**: `app_user`(Flyway V13), `favorite`(V14, `(user_id, region_code, industry_code)` UNIQUE + FK `ON DELETE CASCADE`).
+- **교차 사이트 쿠키(prod)**: 배포 시 프론트(Cloudflare)와 백엔드(Render)가 서로 다른 도메인이라 세션/CSRF 쿠키가 교차 사이트로 오간다 → `SameSite=None; Secure`가 필수(기본 Lax면 쿠키 미전송으로 로그인 미유지). `application-prod.yml`의 `server.servlet.session.cookie.same-site=none/secure=true`(JSESSIONID)와 `SecurityConfig`가 그 값을 읽어 XSRF-TOKEN 쿠키에도 동일 적용한다(dev는 둘 다 localhost=동일 사이트라 기본값 Lax로 정상). ⚠️ 교차 사이트 쿠키는 Safari(ITP)·엄격한 브라우저 추적 방지에서 차단될 수 있음 — 완전 해결하려면 프론트/백엔드를 동일 오리진(리버스 프록시)으로 두는 방식 검토(향후).
 
 ## Admin API 인증 (2026-08 추가)
 

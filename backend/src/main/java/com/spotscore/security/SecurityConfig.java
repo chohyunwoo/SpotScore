@@ -2,6 +2,7 @@ package com.spotscore.security;
 
 import com.spotscore.config.CorsProperties;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -32,12 +33,26 @@ import java.util.List;
  * - CSRF: 세션 쿠키 기반이라 CSRF 방어가 필요하다. SPA가 읽을 수 있게 HttpOnly=false
  *   쿠키(XSRF-TOKEN)로 토큰을 내리고, 상태를 바꾸는 즐겨찾기/로그아웃 요청에만 적용한다.
  *   admin(별도 키 인증)·챗봇(공개)·로그인/회원가입(세션 부트스트랩 지점)은 CSRF 제외.
+ * - 쿠키 SameSite/Secure: 배포(prod)는 프론트(Cloudflare)와 백엔드(Render)가 서로 다른
+ *   도메인이라 세션/CSRF 쿠키가 "교차 사이트"로 오간다. 이 경우 브라우저는 SameSite=None;
+ *   Secure가 아니면 쿠키를 전송하지 않으므로 prod에선 그 값을 쓴다. 세션 쿠키(JSESSIONID)는
+ *   application-prod.yml의 server.servlet.session.cookie 설정이 담당하고, 여기선 그 값과
+ *   동일하게 CSRF 쿠키(XSRF-TOKEN)에도 SameSite/Secure를 맞춰 둘이 어긋나지 않게 한다.
+ *   dev(둘 다 localhost = 동일 사이트)는 기본값 Lax/비-secure라 http에서도 정상 동작한다.
  */
 @Configuration
 public class SecurityConfig {
 
     private final CorsProperties corsProperties;
     private final RestAuthenticationEntryPoint authenticationEntryPoint;
+
+    // 세션 쿠키(server.servlet.session.cookie.*)와 같은 값을 재사용해 CSRF 쿠키도 맞춘다.
+    // 기본값은 dev(로컬 http)용 - prod yml에서 none/true로 override한다.
+    @Value("${server.servlet.session.cookie.same-site:Lax}")
+    private String cookieSameSite;
+
+    @Value("${server.servlet.session.cookie.secure:false}")
+    private boolean cookieSecure;
 
     public SecurityConfig(CorsProperties corsProperties, RestAuthenticationEntryPoint authenticationEntryPoint) {
         this.corsProperties = corsProperties;
@@ -50,10 +65,15 @@ public class SecurityConfig {
         // (기본 Xor 핸들러는 마스킹이 있어 JS가 쿠키 값을 그대로 헤더에 넣으면 불일치).
         CsrfTokenRequestAttributeHandler csrfRequestHandler = new CsrfTokenRequestAttributeHandler();
 
+        // 교차 사이트 배포(prod)에서 XSRF-TOKEN 쿠키가 전송되려면 세션 쿠키와 동일하게
+        // SameSite=None; Secure여야 한다(dev는 Lax/비-secure 기본값).
+        CookieCsrfTokenRepository csrfTokenRepository = CookieCsrfTokenRepository.withHttpOnlyFalse();
+        csrfTokenRepository.setCookieCustomizer(cookie -> cookie.sameSite(cookieSameSite).secure(cookieSecure));
+
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(csrf -> csrf
-                        .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+                        .csrfTokenRepository(csrfTokenRepository)
                         .csrfTokenRequestHandler(csrfRequestHandler)
                         .ignoringRequestMatchers(
                                 "/api/v1/admin/**",
