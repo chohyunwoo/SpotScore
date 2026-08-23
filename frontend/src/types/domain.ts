@@ -192,3 +192,38 @@ export interface ChatRequest {
 export interface ChatResponse {
   reply: string;
 }
+
+/**
+ * 인증(세션 + HttpOnly 쿠키) 관련 타입. UserResponse.java / AuthController 확인.
+ * 비밀번호 해시 등 민감 필드는 응답에 포함되지 않는다(UserResponse가 최소 정보만 노출).
+ */
+export interface User {
+  id: number;
+  email: string;
+  displayName: string;
+}
+
+export interface RegisterPayload {
+  email: string;
+  password: string;
+  displayName: string;
+}
+
+export interface LoginPayload {
+  email: string;
+  password: string;
+}
+
+/**
+ * GET /api/v1/favorites 응답 아이템 (FavoriteResponse.java 확인). 지역명/업종명을
+ * 함께 내려주므로 비교 뷰 목록을 코드→이름 재조회 없이 렌더링하고, 각 항목의 상세
+ * 점수는 기존 /api/v1/scores/detail로 조회한다.
+ */
+export interface Favorite {
+  id: number;
+  regionCode: string;
+  regionName: string;
+  industryCode: string;
+  industryName: string;
+  createdAt: string;
+}
