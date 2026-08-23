@@ -1,0 +1,40 @@
+name: keep-warm
+
+# Render 무료 티어는 15분간 요청이 없으면 인스턴스를 내리고(spin down), 다음 요청은
+# 콜드스타트로 30초~1분 걸린다(실측: 잠자던 백엔드 첫 요청 약 22초). 배포된 백엔드를
+# 주기적으로 핑해 깨어 있게 유지한다.
+#
+# 주의: GitHub Actions의 schedule은 실행이 지연/누락될 수 있어(GitHub 공지) 15분 창을
+# 100% 보장하진 않는다. 완전한 상시 가동이 필요하면 UptimeRobot 등 외부 모니터를 병행.
+# 또한 repo에 60일 이상 활동이 없으면 스케줄 워크플로우가 자동 비활성화된다.
+# (SpotScore는 PUBLIC repo라 Actions 분 무제한 - 이 cron 빈도로 비용 이슈 없음.)
+
+on:
+  schedule:
+    - cron: '*/10 * * * *' # 10분마다
+  workflow_dispatch: {} # 수동 실행 버튼
+
+# 동시에 여러 스케줄이 밀렸다 겹쳐 실행되는 것을 막는다(가장 최근 것만 유지).
+concurrency:
+  group: keep-warm
+  cancel-in-progress: true
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping SpotScore backend
+        run: |
+          URL="https://spotscore-backend.onrender.com/api/v1/industries"
+          echo "Pinging $URL"
+          # 콜드스타트(최대 ~1분) 대비 타임아웃 여유 + 재시도. 핑 실패는 워크플로우를
+          # 실패시키지 않는다(일시적 장애로 알림이 쌓이는 것을 방지).
+          code=$(curl -sS -o /dev/null -w "%{http_code}" \
+            --max-time 90 --retry 3 --retry-delay 10 --retry-all-errors "$URL" || echo "000")
+          echo "HTTP $code"
+          if [ "$code" = "200" ]; then
+            echo "warm ✅"
+          else
+            echo "::warning::keep-warm ping returned $code (non-fatal)"
+          fi
