@@ -292,7 +292,7 @@ export function CompareView({ onClose }: CompareViewProps) {
                     <MetricRowTh>{metric.label}</MetricRowTh>
                     {list.map((fav, index) => {
                       const query = detailQueries[index];
-                      if (query.isLoading) {
+                      if (!query || query.isLoading) {
                         return <StateCell key={fav.id}>불러오는 중…</StateCell>;
                       }
                       if (query.isError || !query.data) {
@@ -322,7 +322,7 @@ export function CompareView({ onClose }: CompareViewProps) {
                     <MetricRowTh>{metric.label}</MetricRowTh>
                     {list.map((fav, index) => {
                       const query = detailQueries[index];
-                      if (query.isLoading) {
+                      if (!query || query.isLoading) {
                         return <StateCell key={fav.id}>불러오는 중…</StateCell>;
                       }
                       if (query.isError || !query.data) {
