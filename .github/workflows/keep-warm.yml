@@ -4,15 +4,20 @@ name: keep-warm
 # 콜드스타트로 30초~1분 걸린다(실측: 잠자던 백엔드 첫 요청 약 22초). 배포된 백엔드를
 # 주기적으로 핑해 깨어 있게 유지한다.
 #
-# 주의: GitHub Actions의 schedule은 실행이 지연/누락될 수 있어(GitHub 공지) 15분 창을
-# 100% 보장하진 않는다. 완전한 상시 가동이 필요하면 UptimeRobot 등 외부 모니터를 병행.
-# 또한 repo에 60일 이상 활동이 없으면 스케줄 워크플로우가 자동 비활성화된다.
-# (SpotScore는 PUBLIC repo라 Actions 분 무제한 - 이 cron 빈도로 비용 이슈 없음.)
+# 주의사항:
+# - GitHub Actions의 schedule은 실행이 지연/누락될 수 있어(GitHub 공지) 15분 창을
+#   100% 보장하진 않는다. repo 60일 무활동 시 스케줄이 자동 비활성화된다.
+# - SpotScore는 PUBLIC repo라 Actions 분은 무제한(비용 이슈 없음).
+# - 진짜 상한은 Render 무료 티어의 "월 750 instance-hours(무료 서비스 공유)"다.
+#   서비스를 24/7로 warm하면 ~730h라, 무료 서비스가 2개(SpotScore+CommerceCore)면
+#   합계 ~1,460h로 750h를 초과해 월 중순쯤 정지된다. 그래서 24/7이 아니라 활동
+#   시간대(하루 ~12h)만 핑해 두 서비스 합계를 ~720h로 유지한다.
 
 on:
   schedule:
-    - cron: '*/10 * * * *' # 10분마다
-  workflow_dispatch: {} # 수동 실행 버튼
+    # cron은 UTC 기준. '1-12'(UTC 01~12시)는 KST 10~22시대 ≈ 하루 12시간 → 월 ~360h.
+    - cron: '*/10 1-12 * * *'
+  workflow_dispatch: {} # 시간대 밖에서도 필요하면 수동 실행
 
 # 동시에 여러 스케줄이 밀렸다 겹쳐 실행되는 것을 막는다(가장 최근 것만 유지).
 concurrency:
