@@ -28,12 +28,28 @@ function readCookie(name: string): string | null {
 }
 
 async function parseBody<T>(response: Response, url: string): Promise<T> {
-  if (!response.ok) {
-    throw new ApiError(response.status, `API 요청 실패: ${response.status} ${response.statusText} (${url})`);
-  }
   // 배치 미실행/204 No Content 등으로 바디가 비어있을 수 있음 — response.json()이
   // 빈 문자열에 대해 던지는 파싱 예외를 막기 위해 텍스트로 먼저 확인.
   const text = await response.text();
+
+  if (!response.ok) {
+    // 백엔드 GlobalExceptionHandler/보안 계층은 실패 시 ErrorResponse(JSON)를 내려준다.
+    // 그 message를 꺼내 사용자에게 그대로 보여주고(로그인 실패/중복 이메일 등), 없으면
+    // 상태 코드 기반 기본 메시지로 대체한다.
+    let message = `API 요청 실패: ${response.status} ${response.statusText} (${url})`;
+    if (text.length > 0) {
+      try {
+        const parsed = JSON.parse(text) as { message?: string };
+        if (parsed.message) {
+          message = parsed.message;
+        }
+      } catch {
+        // JSON이 아니면 기본 메시지 유지.
+      }
+    }
+    throw new ApiError(response.status, message);
+  }
+
   if (text.length === 0) {
     return undefined as T;
   }

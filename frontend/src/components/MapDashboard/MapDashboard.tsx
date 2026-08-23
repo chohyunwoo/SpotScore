@@ -4,6 +4,7 @@ import { useRanking } from '../../api/scores';
 import { useStores } from '../../api/stores';
 import { useSelection } from '../../context/SelectionContext';
 import { IndustrySelector } from '../IndustrySelector/IndustrySelector';
+import { FavoriteStar } from '../FavoriteStar/FavoriteStar';
 import { RegionIndustryDetailPanel } from '../RegionIndustryDetailPanel/RegionIndustryDetailPanel';
 import { ChatWidget } from '../ChatWidget/ChatWidget';
 import { RegionSearchBox } from '../RegionSearchBox/RegionSearchBox';
@@ -92,12 +93,23 @@ const RankingScroll = styled.div`
   overflow-y: auto;
 `;
 
+/**
+ * 랭킹 행은 "지역 선택" 버튼이라, 즐겨찾기 별표를 그 버튼 안에 넣으면 버튼 중첩이
+ * 되어(잘못된 HTML) 클릭이 충돌한다. 행 전체를 relative 래퍼로 감싸고 별표는 그
+ * 형제로 우측에 겹쳐 둔다 - 별표 클릭은 행 선택으로 전파되지 않는다.
+ */
+const RankingRowWrapper = styled.div`
+  position: relative;
+`;
+
 const RankingRow = styled.button<{ $selected: boolean }>`
   width: 100%;
   display: flex;
   align-items: center;
   gap: ${({ theme }) => theme.spacing.sm};
   padding: ${({ theme }) => `${theme.spacing.sm} ${theme.spacing.lg}`};
+  /* 우측에 겹쳐 둔 별표 자리를 비워 텍스트/점수와 겹치지 않게 한다. */
+  padding-right: ${({ theme }) => theme.spacing.xl};
   border: none;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border};
   background: ${({ $selected, theme }) => ($selected ? theme.colors.accentSurface : 'transparent')};
@@ -108,6 +120,13 @@ const RankingRow = styled.button<{ $selected: boolean }>`
   &:hover {
     background: ${({ theme }) => theme.colors.accentSurface};
   }
+`;
+
+const RankingRowStar = styled(FavoriteStar)`
+  position: absolute;
+  top: 50%;
+  right: ${({ theme }) => theme.spacing.sm};
+  transform: translateY(-50%);
 `;
 
 const RankingRank = styled.span`
@@ -582,20 +601,22 @@ export function MapDashboard() {
             !isLoading &&
             !isError &&
             rankingList.map((item, index) => (
-              <RankingRow
-                key={item.regionCode}
-                type="button"
-                $selected={item.regionCode === regionCode}
-                onClick={() => setRegionCode(item.regionCode)}
-              >
-                <RankingRank>{index + 1}</RankingRank>
-                <TierDot
-                  $color={getAttractivenessTierColor(item.attractivenessTier, theme)}
-                  title={ATTRACTIVENESS_TIER_ICON[item.attractivenessTier]}
-                />
-                <RankingRegionName>{item.regionName}</RankingRegionName>
-                <RankingScore>{item.totalScore}</RankingScore>
-              </RankingRow>
+              <RankingRowWrapper key={item.regionCode}>
+                <RankingRow
+                  type="button"
+                  $selected={item.regionCode === regionCode}
+                  onClick={() => setRegionCode(item.regionCode)}
+                >
+                  <RankingRank>{index + 1}</RankingRank>
+                  <TierDot
+                    $color={getAttractivenessTierColor(item.attractivenessTier, theme)}
+                    title={ATTRACTIVENESS_TIER_ICON[item.attractivenessTier]}
+                  />
+                  <RankingRegionName>{item.regionName}</RankingRegionName>
+                  <RankingScore>{item.totalScore}</RankingScore>
+                </RankingRow>
+                <RankingRowStar regionCode={item.regionCode} industryCode={industryCode} size="sm" />
+              </RankingRowWrapper>
             ))}
         </RankingScroll>
       </Sidebar>

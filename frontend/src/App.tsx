@@ -1,4 +1,8 @@
+import { useState } from 'react';
 import styled from 'styled-components';
+import { AuthBar } from './components/Auth/AuthBar';
+import { AuthModal } from './components/Auth/AuthModal';
+import { CompareView } from './components/Compare/CompareView';
 import { MapDashboard } from './components/MapDashboard/MapDashboard';
 
 const Page = styled.div`
@@ -6,6 +10,13 @@ const Page = styled.div`
   display: flex;
   flex-direction: column;
   padding: ${({ theme }) => theme.spacing.lg};
+  gap: ${({ theme }) => theme.spacing.md};
+`;
+
+const TopBar = styled.header`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: ${({ theme }) => theme.spacing.md};
 `;
 
@@ -22,12 +33,20 @@ const DashboardArea = styled.div`
 `;
 
 function App() {
+  const [compareOpen, setCompareOpen] = useState(false);
+
   return (
     <Page>
-      <AppTitle>SpotScore — 창업 입지 추천 대시보드</AppTitle>
+      <TopBar>
+        <AppTitle>SpotScore — 창업 입지 추천 대시보드</AppTitle>
+        <AuthBar onOpenCompare={() => setCompareOpen(true)} />
+      </TopBar>
       <DashboardArea>
         <MapDashboard />
       </DashboardArea>
+
+      {compareOpen && <CompareView onClose={() => setCompareOpen(false)} />}
+      <AuthModal />
     </Page>
   );
 }
