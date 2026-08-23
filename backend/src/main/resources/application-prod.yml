@@ -13,6 +13,18 @@ spring:
     enabled: true
     locations: classpath:db/migration
 
+# 배포 환경은 프론트(Cloudflare)와 백엔드(Render)가 서로 다른 도메인이라 세션 쿠키가
+# "교차 사이트"로 오간다 - 브라우저가 쿠키를 전송하려면 SameSite=None; Secure가 필수다
+# (기본값 Lax면 교차 사이트 요청에 쿠키가 실리지 않아 로그인이 유지되지 않음). SecurityConfig가
+# 이 값을 읽어 CSRF 쿠키(XSRF-TOKEN)에도 동일하게 맞춘다. dev는 이 블록이 없어 기본값(Lax)이라
+# localhost http에서도 정상 동작한다.
+server:
+  servlet:
+    session:
+      cookie:
+        same-site: none
+        secure: true
+
 spotscore:
   sgis:
     base-url: https://sgisapi.mods.go.kr/OpenAPI3

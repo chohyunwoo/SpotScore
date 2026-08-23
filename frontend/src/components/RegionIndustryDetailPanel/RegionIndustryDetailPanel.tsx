@@ -5,6 +5,7 @@ import { ApiError } from '../../api/client';
 import { findWeightPercent, useScoreWeights } from '../../api/scoreWeights';
 import { useRanking, useScoreDetail } from '../../api/scores';
 import { useSelection } from '../../context/SelectionContext';
+import { FavoriteStar } from '../FavoriteStar/FavoriteStar';
 import {
   ATTRACTIVENESS_TIER_ICON,
   ATTRACTIVENESS_TIER_LABEL,
@@ -51,8 +52,17 @@ const HeaderSection = styled.div`
   margin-top: ${({ theme }) => theme.spacing.sm};
 `;
 
+/** 지역·업종 제목과 즐겨찾기 별표를 한 줄에 둔다 - 별표는 우측 정렬. */
+const TitleRow = styled.div`
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: ${({ theme }) => theme.spacing.sm};
+  margin-bottom: ${({ theme }) => theme.spacing.sm};
+`;
+
 const RegionTitle = styled.h1`
-  margin: 0 0 ${({ theme }) => theme.spacing.sm};
+  margin: 0;
   font-size: ${({ theme }) => theme.typography.h1.size};
   font-weight: ${({ theme }) => theme.typography.h1.weight};
   color: ${({ theme }) => theme.colors.textPrimary};
@@ -400,9 +410,12 @@ export function RegionIndustryDetailPanel() {
       {closeButton}
 
       <HeaderSection>
-        <RegionTitle>
-          {detail.regionName} · {detail.industryName}
-        </RegionTitle>
+        <TitleRow>
+          <RegionTitle>
+            {detail.regionName} · {detail.industryName}
+          </RegionTitle>
+          <FavoriteStar regionCode={regionCode} industryCode={industryCode} size="md" />
+        </TitleRow>
         {rankingItem && (
           <>
             <TierBadge $color={getAttractivenessTierColor(rankingItem.attractivenessTier, theme)}>
