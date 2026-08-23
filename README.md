@@ -177,7 +177,10 @@ npm run dev                   # http://localhost:5173 (Kakao Map 키가 이 도�
 
 - **프론트** Cloudflare Pages · **백엔드** Render(Docker) · **DB** Supabase PostgreSQL — 모두 무료 티어.
 - **same-origin 프록시**: 프론트와 백엔드가 서로 다른 도메인이면 세션·CSRF 쿠키가 서드파티 쿠키로 취급돼 로그인이 유지되지 않는다. Cloudflare Pages Function(`frontend/functions/api`)이 `/api/*`를 백엔드로 리버스 프록시해 쿠키를 1st-party로 만든다(프론트는 상대경로 `/api/...`로 호출, 배포 빌드에서 `VITE_API_BASE_URL`을 비움).
-- **콜드스타트**: Render 무료 티어는 15분 무활동 시 인스턴스를 내리고 다음 요청은 콜드스타트로 30초~1분 걸린다. GitHub Actions keep-warm 워크플로우가 활동 시간대(KST 10~22시)에 백엔드를 핑해 깨워둔다 — 무료 월 750 instance-hours 한도 안에서 운영하기 위한 절충이라, 심야엔 첫 접속이 느릴 수 있다.
+- **콜드스타트 & keep-warm**(`.github/workflows/keep-warm.yml`): Render 무료 티어는 15분 무활동 시 인스턴스를 내리고 다음 요청은 콜드스타트로 30초~1분 걸린다. GitHub Actions로 활동 시간대에 백엔드를 핑해 깨워두는데, 단순 `*/10` cron은 GitHub이 실행을 지연·누락시켜(실측 34분 갭) 15분 spin-down을 못 막았다. 그래서:
+  - **매시 정시 트리거 + 잡 내부 sleep 루프** — "언제 시작하냐"만 GitHub에 맡기고(정시 트리거는 상대적으로 안정적), 실제 핑 간격(5분)은 러너의 `sleep`으로 정확히 보장한다.
+  - 각 잡을 **~70분** 돌려 다음 정시 잡과 **~10분 겹치게(overlap)** 해, 트리거가 지연돼도 경계에서 갭이 생기지 않는다(잡끼리 서로 취소하지 않도록 `concurrency`는 두지 않음).
+  - 활동 시간대는 **KST 10:00~22:00**(cron은 UTC 기준 `0 1-12`). 12시간 × 2개 서비스 ≈ 월 720h로, Render 무료 **750 instance-hours**(계정 내 무료 서비스 공유) 한도 안에 든다. 이 절충 때문에 **심야(22~10시)엔 첫 접속이 콜드스타트로 느릴 수 있다**.
 
 ## 확장성 설계 원칙
 
