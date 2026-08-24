@@ -24,6 +24,12 @@ logging:
     com.spotscore: DEBUG
 
 spotscore:
+  chat:
+    # 공개 챗봇(/api/v1/chat) IP당 레이트리밋(토큰 버킷). 기본값은 저트래픽 데모 기준 -
+    # refill-period-seconds마다 capacity만큼 버킷이 다시 찬다(이슈 #32). 필요 시 환경변수로 조정.
+    rate-limit:
+      capacity: ${SPOTSCORE_CHAT_RATE_LIMIT_CAPACITY:20}
+      refill-period-seconds: ${SPOTSCORE_CHAT_RATE_LIMIT_REFILL_SECONDS:60}
   batch:
     # 매월 1일 03:00 실행. 배치 대상 지역은 profile별 설정(application-dev.yml 등)에서
     # 주입한다 - CLAUDE.md 확장성 원칙에 따라 여기에 지역을 하드코딩하지 않는다.
