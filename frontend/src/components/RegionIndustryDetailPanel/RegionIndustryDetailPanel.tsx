@@ -1,14 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import styled, { useTheme } from 'styled-components';
 import { ApiError } from '../../api/client';
 import { findWeightPercent, useScoreWeights } from '../../api/scoreWeights';
 import { useRanking, useScoreDetail } from '../../api/scores';
-import { useStores } from '../../api/stores';
 import { useSelection } from '../../context/SelectionContext';
-import type { StoreItem } from '../../types/domain';
 import { FavoriteStar } from '../FavoriteStar/FavoriteStar';
-import { StoreDetailModal } from '../StoreDetailModal/StoreDetailModal';
 import {
   ATTRACTIVENESS_TIER_ICON,
   ATTRACTIVENESS_TIER_LABEL,
@@ -310,82 +307,7 @@ function useAgeWeightNoticeText(): string {
   return `이 업종에는 연령적합도 ${agePercent}% 가중치가 추가로 적용됐어요.`;
 }
 
-/** 선택 지역×업종의 개별 가게 목록 섹션. 항목 hover는 지도 마커 강조(onHoverStore)와
- * 연동되고, 클릭은 StoreDetailModal을 연다. 가게가 수백 개일 수 있어 스크롤로 가둔다. */
-const StoreSection = styled.section`
-  margin-top: ${({ theme }) => theme.spacing.lg};
-  padding-top: ${({ theme }) => theme.spacing.lg};
-  border-top: 1px solid ${({ theme }) => theme.colors.border};
-`;
-
-const StoreSectionTitle = styled.h3`
-  margin: 0 0 ${({ theme }) => theme.spacing.sm};
-  font-size: ${({ theme }) => theme.typography.h3.size};
-  font-weight: ${({ theme }) => theme.typography.h3.weight};
-  color: ${({ theme }) => theme.colors.textPrimary};
-`;
-
-const StoreCountLabel = styled.span`
-  margin-left: ${({ theme }) => theme.spacing.xs};
-  font-size: ${({ theme }) => theme.typography.caption.size};
-  font-weight: ${({ theme }) => theme.typography.weight.regular};
-  color: ${({ theme }) => theme.colors.textSecondary};
-`;
-
-const StoreListScroll = styled.div`
-  max-height: 240px;
-  overflow-y: auto;
-  border: 1px solid ${({ theme }) => theme.colors.border};
-  border-radius: ${({ theme }) => theme.radius.sm};
-`;
-
-const StoreRow = styled.button`
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: ${({ theme }) => theme.spacing.sm};
-  padding: ${({ theme }) => `${theme.spacing.sm} ${theme.spacing.md}`};
-  border: none;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
-  background: transparent;
-  cursor: pointer;
-  text-align: left;
-  font-family: inherit;
-  font-size: ${({ theme }) => theme.typography.bodySmall.size};
-  color: ${({ theme }) => theme.colors.textPrimary};
-
-  &:last-child {
-    border-bottom: none;
-  }
-  &:hover {
-    background: ${({ theme }) => theme.colors.accentSurface};
-  }
-`;
-
-const StoreRowName = styled.span`
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-`;
-
-const StoreRowChevron = styled.span`
-  color: ${({ theme }) => theme.colors.textSecondary};
-  font-size: ${({ theme }) => theme.typography.caption.size};
-`;
-
-const StoreEmpty = styled.div`
-  padding: ${({ theme }) => theme.spacing.md};
-  color: ${({ theme }) => theme.colors.textSecondary};
-  font-size: ${({ theme }) => theme.typography.bodySmall.size};
-`;
-
-interface RegionIndustryDetailPanelProps {
-  /** 목록 항목 hover 시 지도의 해당 가게 마커를 강조하도록 MapDashboard가 넘기는 콜백. */
-  onHoverStore?: (bizesId: string | null) => void;
-}
-
-export function RegionIndustryDetailPanel({ onHoverStore }: RegionIndustryDetailPanelProps = {}) {
+export function RegionIndustryDetailPanel() {
   const { industryCode, regionCode, setRegionCode } = useSelection();
   const { data: detail, isLoading, isError, error } = useScoreDetail(regionCode, industryCode);
   const isNotFound = error instanceof ApiError && error.status === 404;
@@ -400,22 +322,6 @@ export function RegionIndustryDetailPanel({ onHoverStore }: RegionIndustryDetail
     () => ranking?.find((item) => item.regionCode === regionCode) ?? null,
     [ranking, regionCode],
   );
-
-  // 개별 가게 목록 - MapDashboard도 같은 useStores를 호출하지만 queryKey가 같아
-  // TanStack Query 캐시가 공유돼 네트워크 요청은 1회다(중복 호출 아님).
-  const { data: stores, isLoading: storesLoading } = useStores(regionCode, industryCode);
-  const [selectedStore, setSelectedStore] = useState<StoreItem | null>(null);
-
-  // 지역/업종이 바뀌거나 패널이 사라질 때 지도에 남은 hover 강조를 확실히 해제한다
-  // (목록 행 mouseleave가 안 뜨는 경우 대비).
-  useEffect(() => {
-    return () => onHoverStore?.(null);
-  }, [regionCode, industryCode, onHoverStore]);
-
-  // 지역/업종이 바뀌면 이전 가게 모달은 더 이상 유효하지 않으므로 닫는다.
-  useEffect(() => {
-    setSelectedStore(null);
-  }, [regionCode, industryCode]);
 
   const missingFields = useMemo(() => {
     if (!detail) return [];
@@ -720,44 +626,6 @@ export function RegionIndustryDetailPanel({ onHoverStore }: RegionIndustryDetail
       */}
       {!detail.ageDirection && (
         <NeutralAgeMetricNotice>이 업종은 연령 구성과 무관해 연령적합도 지표를 사용하지 않아요.</NeutralAgeMetricNotice>
-      )}
-
-      <StoreSection>
-        <StoreSectionTitle>
-          가게 목록
-          {!storesLoading && stores != null && <StoreCountLabel>({stores.length}곳)</StoreCountLabel>}
-        </StoreSectionTitle>
-        {storesLoading ? (
-          <StoreEmpty>가게 목록을 불러오는 중...</StoreEmpty>
-        ) : !stores || stores.length === 0 ? (
-          <StoreEmpty>표시할 가게가 없어요.</StoreEmpty>
-        ) : (
-          <StoreListScroll>
-            {stores.map((store) => (
-              <StoreRow
-                key={store.bizesId}
-                type="button"
-                onMouseEnter={() => onHoverStore?.(store.bizesId)}
-                onMouseLeave={() => onHoverStore?.(null)}
-                onFocus={() => onHoverStore?.(store.bizesId)}
-                onBlur={() => onHoverStore?.(null)}
-                onClick={() => setSelectedStore(store)}
-              >
-                <StoreRowName>{store.bizesNm}</StoreRowName>
-                <StoreRowChevron>상세 ›</StoreRowChevron>
-              </StoreRow>
-            ))}
-          </StoreListScroll>
-        )}
-      </StoreSection>
-
-      {selectedStore && (
-        <StoreDetailModal
-          store={selectedStore}
-          regionName={detail.regionName}
-          industryName={detail.industryName}
-          onClose={() => setSelectedStore(null)}
-        />
       )}
     </PanelRoot>
   );
