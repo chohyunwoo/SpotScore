@@ -8,6 +8,7 @@ import com.spotscore.config.DiscoveryProperties;
 import com.spotscore.config.FeaturedIndustryProperties;
 import com.spotscore.config.IndustryAgeDirectionProperties;
 import com.spotscore.config.GroqProperties;
+import com.spotscore.config.KakaoProperties;
 import com.spotscore.config.KosisProperties;
 import com.spotscore.config.SgisProperties;
 import com.spotscore.config.StoreZoneProperties;
@@ -19,7 +20,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableConfigurationProperties({SgisProperties.class, StoreZoneProperties.class, BatchProperties.class,
         CorsProperties.class, DiscoveryProperties.class, FeaturedIndustryProperties.class, KosisProperties.class,
         IndustryAgeDirectionProperties.class, GroqProperties.class, AdminSecurityProperties.class,
-        ChatRateLimitProperties.class})
+        ChatRateLimitProperties.class, KakaoProperties.class})
 @EnableScheduling
 @SpringBootApplication
 public class SpotScoreApplication {
