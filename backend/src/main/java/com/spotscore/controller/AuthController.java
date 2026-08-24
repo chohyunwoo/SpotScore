@@ -67,6 +67,16 @@ public class AuthController {
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(request.email(), request.password()));
 
+        // 세션 고정(session fixation) 방어(OWASP A07): 수동 로그인은 Spring Security의
+        // 자동 세션 고정 방어(인증 필터가 담당)를 타지 않으므로, 인증 성공 직후 세션 ID를
+        // 직접 회전시켜 로그인 전 세션 ID가 로그인 후에도 그대로 유지되지 않게 한다.
+        // 기존 세션이 없으면(공격자가 심어둔 세션 자체가 없어 고정 위험이 없고) 아래
+        // saveContext가 새 세션을 만들므로, 세션이 있을 때만 회전한다
+        // (changeSessionId는 세션이 없으면 IllegalStateException을 던짐).
+        if (httpRequest.getSession(false) != null) {
+            httpRequest.changeSessionId();
+        }
+
         SecurityContext context = SecurityContextHolder.createEmptyContext();
         context.setAuthentication(authentication);
         SecurityContextHolder.setContext(context);

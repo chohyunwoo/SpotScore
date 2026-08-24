@@ -1,15 +1,9 @@
 package com.spotscore.batch;
 
 import com.spotscore.batch.mapping.RegionCodeMappingValidator;
-import com.spotscore.collector.KosisAgeCollector;
 import com.spotscore.config.BatchProperties;
 import com.spotscore.domain.Region;
-import com.spotscore.repository.AgeStatRepository;
-import com.spotscore.repository.IndustryCategoryRepository;
-import com.spotscore.repository.PopulationStatRepository;
 import com.spotscore.repository.RegionRepository;
-import com.spotscore.repository.StoreCountRepository;
-import com.spotscore.repository.StoreRepository;
 import com.spotscore.scoring.ScoreCalculationService;
 import org.junit.jupiter.api.Test;
 
@@ -35,12 +29,7 @@ class MonthlyDataCollectionBatchJobTest {
         return new MonthlyDataCollectionBatchJob(props,
                 mock(RegionCodeMappingValidator.class),
                 regionRepository,
-                mock(IndustryCategoryRepository.class),
-                mock(PopulationStatRepository.class),
-                mock(StoreCountRepository.class),
-                mock(StoreRepository.class),
-                mock(AgeStatRepository.class),
-                mock(KosisAgeCollector.class),
+                mock(RegionPersistenceService.class),
                 mock(ScoreCalculationService.class));
     }
 
