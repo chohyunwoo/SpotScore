@@ -24,6 +24,13 @@ logging:
     com.spotscore: DEBUG
 
 spotscore:
+  kakao:
+    # Kakao Local(키워드 검색) REST API - 가게 상세 모달의 "카카오맵에서 보기"를 실제
+    # 등록 장소 상세로 연결하는 데 쓴다(이슈 #34). 미설정 시 프론트가 이름 검색으로
+    # 폴백하므로 필수는 아니다(Groq와 동일한 선택적 처리). 발급: developers.kakao.com
+    # → 내 애플리케이션 → 앱 키 → REST API 키.
+    base-url: https://dapi.kakao.com
+    rest-api-key: ${KAKAO_REST_API_KEY:}
   chat:
     # 공개 챗봇(/api/v1/chat) IP당 레이트리밋(토큰 버킷). 기본값은 저트래픽 데모 기준 -
     # refill-period-seconds마다 capacity만큼 버킷이 다시 찬다(이슈 #32). 필요 시 환경변수로 조정.

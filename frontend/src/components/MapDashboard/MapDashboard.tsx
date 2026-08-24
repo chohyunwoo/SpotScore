@@ -1,11 +1,15 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import styled, { useTheme } from 'styled-components';
+import { useIndustries } from '../../api/industries';
 import { useRanking } from '../../api/scores';
 import { useStores } from '../../api/stores';
 import { useSelection } from '../../context/SelectionContext';
+import type { StoreItem } from '../../types/domain';
 import { IndustrySelector } from '../IndustrySelector/IndustrySelector';
 import { FavoriteStar } from '../FavoriteStar/FavoriteStar';
 import { RegionIndustryDetailPanel } from '../RegionIndustryDetailPanel/RegionIndustryDetailPanel';
+import { StoreListPanel } from '../StoreListPanel/StoreListPanel';
+import { StoreDetailModal } from '../StoreDetailModal/StoreDetailModal';
 import { ChatWidget } from '../ChatWidget/ChatWidget';
 import { RegionSearchBox } from '../RegionSearchBox/RegionSearchBox';
 import {
@@ -372,9 +376,22 @@ export function MapDashboard() {
   const { data: ranking, isLoading, isError } = useRanking(industryCode);
   // 상세 패널이 열려있을 때만(regionCode && industryCode 둘 다 있을 때만) enabled -
   // 전체 랭킹 지도에서는 호출되지 않는다(StoreController 문서에 명시된 사용 조건).
-  const { data: stores } = useStores(regionCode, industryCode);
+  const { data: stores, isLoading: storesLoading } = useStores(regionCode, industryCode);
+  const { data: industries } = useIndustries();
   const kakaoStatus = useKakaoLoader();
   const theme = useTheme();
+
+  // 지도 위 가게 목록 패널에서 선택한 가게(가게 상세 모달용). 지역/업종이 바뀌면 닫는다.
+  const [selectedStore, setSelectedStore] = useState<StoreItem | null>(null);
+  useEffect(() => {
+    setSelectedStore(null);
+  }, [regionCode, industryCode]);
+
+  // 가게 상세 모달에 표시할 현재 선택된 지역명/업종명(랭킹·업종 목록 캐시에서 가져옴).
+  const selectedRegionName =
+    ranking?.find((item) => item.regionCode === regionCode)?.regionName ?? regionCode ?? '';
+  const selectedIndustryName =
+    industries?.find((item) => item.industryCode === industryCode)?.industryName ?? industryCode ?? '';
 
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<kakao.maps.Map | null>(null);
@@ -529,19 +546,23 @@ export function MapDashboard() {
       // 라벨 없는 숫자 배지만으로는 "가게 개수"인지 알기 어렵다는 피드백 반영 -
       // hover든 click이든 항상 "가게 N개" 툴팁으로 명확히 밝힌다(클릭은 기본
       // 줌인 동작도 그대로 유지 - disableClickZoom을 켜지 않았으므로 방해 없음).
-      window.kakao.maps.event.addListener(clusterer, 'clusterover', (cluster) => {
-        clusterInfoWindow.setContent(buildClusterTooltipContent(cluster.getSize(), theme));
+      // getSize()가 0으로 오는 순간(마커 재구성 타이밍 등)에는 "가게 0개"라는 무의미한
+      // 툴팁이 뜨지 않게 건너뛴다(#34 피드백).
+      const openClusterTooltip = (cluster: kakao.maps.Cluster) => {
+        const size = cluster.getSize();
+        if (size <= 0) {
+          clusterInfoWindow.close();
+          return;
+        }
+        clusterInfoWindow.setContent(buildClusterTooltipContent(size, theme));
         clusterInfoWindow.setPosition(cluster.getCenter());
         clusterInfoWindow.open(map);
-      });
+      };
+      window.kakao.maps.event.addListener(clusterer, 'clusterover', openClusterTooltip);
       window.kakao.maps.event.addListener(clusterer, 'clusterout', () => {
         clusterInfoWindow.close();
       });
-      window.kakao.maps.event.addListener(clusterer, 'clusterclick', (cluster) => {
-        clusterInfoWindow.setContent(buildClusterTooltipContent(cluster.getSize(), theme));
-        clusterInfoWindow.setPosition(cluster.getCenter());
-        clusterInfoWindow.open(map);
-      });
+      window.kakao.maps.event.addListener(clusterer, 'clusterclick', openClusterTooltip);
 
       storeClustererRef.current = clusterer;
     }
@@ -711,11 +732,29 @@ export function MapDashboard() {
           </>
         )}
 
+        {regionCode && industryCode && (
+          <StoreListPanel
+            stores={stores}
+            isLoading={storesLoading}
+            onHoverStore={handleHoverStore}
+            onSelectStore={setSelectedStore}
+          />
+        )}
+
         <SlidePanel $open={Boolean(regionCode && industryCode)} aria-hidden={!regionCode}>
-          <RegionIndustryDetailPanel onHoverStore={handleHoverStore} />
+          <RegionIndustryDetailPanel />
         </SlidePanel>
 
         <ChatWidget industryCode={industryCode} regionCode={regionCode} />
+
+        {selectedStore && (
+          <StoreDetailModal
+            store={selectedStore}
+            regionName={selectedRegionName}
+            industryName={selectedIndustryName}
+            onClose={() => setSelectedStore(null)}
+          />
+        )}
       </MapCanvasArea>
     </Layout>
   );

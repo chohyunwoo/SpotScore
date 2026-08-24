@@ -1,6 +1,7 @@
 package com.spotscore.controller;
 
 import com.spotscore.dto.StoreItemResponse;
+import com.spotscore.dto.StorePlaceLinkResponse;
 import com.spotscore.query.StoreQueryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -8,6 +9,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -36,5 +38,14 @@ public class StoreController {
         log.info("요청 수신 - endpoint: {}, regionCode: {}, industryCode: {}",
                 request.getRequestURI(), regionCode, industryCode);
         return storeQueryService.getStores(regionCode, industryCode);
+    }
+
+    @Operation(summary = "가게 카카오맵 장소 링크 조회",
+            description = "가게명+좌표로 Kakao Local 검색해 카카오맵 장소 상세 URL을 반환한다. " +
+                    "KAKAO_REST_API_KEY 미설정이거나 검색 결과가 없으면 placeUrl=null(프론트가 이름 검색으로 폴백).")
+    @GetMapping("/{bizesId}/place-link")
+    public StorePlaceLinkResponse getPlaceLink(@PathVariable String bizesId, HttpServletRequest request) {
+        log.info("요청 수신 - endpoint: {}, bizesId: {}", request.getRequestURI(), bizesId);
+        return storeQueryService.getPlaceLink(bizesId);
     }
 }

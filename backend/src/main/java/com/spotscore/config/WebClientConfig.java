@@ -60,6 +60,15 @@ public class WebClientConfig {
     }
 
     @Bean
+    public WebClient kakaoWebClient(KakaoProperties properties) {
+        // Kakao Local REST API. 인증 헤더(KakaoAK)는 키가 미설정일 수 있어 빈 생성 시점에
+        // 고정하지 않고 KakaoLocalClient가 요청마다(키가 있을 때만) 붙인다.
+        return WebClient.builder()
+                .baseUrl(properties.baseUrl())
+                .build();
+    }
+
+    @Bean
     public WebClient groqWebClient(GroqProperties properties) {
         // Groq(OpenAI 호환 엔드포인트)는 SGIS처럼 별도 accessToken 발급 단계가 없다 -
         // 매 요청에 동일한 Authorization 헤더만 필요하므로 SgisAuthService 같은 토큰

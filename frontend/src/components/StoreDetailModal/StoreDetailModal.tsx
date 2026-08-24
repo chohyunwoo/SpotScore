@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import styled from 'styled-components';
+import { useStorePlaceLink } from '../../api/stores';
 import type { StoreItem } from '../../types/domain';
 import { useKakaoLoader } from '../MapDashboard/useKakaoLoader';
 
@@ -124,19 +125,20 @@ interface StoreDetailModalProps {
   onClose: () => void;
 }
 
-function buildKakaoMapUrl(store: StoreItem): string {
-  const name = encodeURIComponent(store.bizesNm);
-  // 좌표가 있으면 해당 위치에 핀을 찍어 여는 link/map, 없으면 이름 검색으로 폴백한다.
-  if (store.lat !== null && store.lon !== null) {
-    return `https://map.kakao.com/link/map/${name},${store.lat},${store.lon}`;
-  }
-  return `https://map.kakao.com/?q=${name}`;
+/** 이름 검색 폴백 URL - 동 이름을 함께 넣어 동명이인 상호의 오검색을 줄인다. */
+function buildSearchFallbackUrl(name: string, regionName: string): string {
+  return `https://map.kakao.com/?q=${encodeURIComponent(`${name} ${regionName}`)}`;
 }
 
 export function StoreDetailModal({ store, regionName, industryName, onClose }: StoreDetailModalProps) {
   const kakaoStatus = useKakaoLoader();
   const miniMapRef = useRef<HTMLDivElement>(null);
   const hasCoordinate = store.lat !== null && store.lon !== null;
+
+  // Kakao Local 검색으로 실제 등록 장소 상세(place_url)를 받아온다. 없으면(키 미설정/결과
+  // 없음/조회 중) 이름 검색 링크로 폴백해, 링크는 항상 유효하게 유지한다.
+  const { data: placeLink, isLoading: placeLinkLoading } = useStorePlaceLink(store.bizesId);
+  const kakaoUrl = placeLink?.placeUrl ?? buildSearchFallbackUrl(store.bizesNm, regionName);
 
   // Esc로 닫기 - AuthModal은 백드롭 클릭만 지원하지만, 여기선 키보드 접근성도 더한다.
   useEffect(() => {
@@ -177,8 +179,8 @@ export function StoreDetailModal({ store, regionName, industryName, onClose }: S
         ) : (
           <NoMap>이 가게는 좌표 정보가 없어 지도를 표시할 수 없어요.</NoMap>
         )}
-        <KakaoLink href={buildKakaoMapUrl(store)} target="_blank" rel="noopener noreferrer">
-          카카오맵에서 보기 ↗
+        <KakaoLink href={kakaoUrl} target="_blank" rel="noopener noreferrer">
+          {placeLinkLoading ? '카카오맵 링크 준비 중…' : '카카오맵에서 보기 ↗'}
         </KakaoLink>
         <SourceNote>
           주소·전화·영업시간 등 상세 정보는 카카오맵에서 확인하세요. (가게 데이터 출처: 소상공인시장진흥공단
