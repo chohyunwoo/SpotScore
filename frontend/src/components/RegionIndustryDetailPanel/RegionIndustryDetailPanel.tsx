@@ -13,6 +13,7 @@ import {
   getAttractivenessTierColor,
 } from '../../styles/attractivenessTier';
 import { getScoreScaleColor, INSUFFICIENT_SAMPLE_LABEL } from '../../styles/scoreScale';
+import { extractStrategyHints } from './locationStrategy';
 
 const NA = 'N/A';
 
@@ -307,6 +308,78 @@ function useAgeWeightNoticeText(): string {
   return `이 업종에는 연령적합도 ${agePercent}% 가중치가 추가로 적용됐어요.`;
 }
 
+/** 입지 약점 & 대응 전략 힌트 섹션(이슈 #37). 낮은 지표에 대한 규칙 기반 참고 힌트. */
+const StrategySection = styled.section`
+  margin-top: ${({ theme }) => theme.spacing.lg};
+  padding-top: ${({ theme }) => theme.spacing.lg};
+  border-top: 1px solid ${({ theme }) => theme.colors.border};
+`;
+
+const StrategyTitle = styled.h3`
+  margin: 0 0 ${({ theme }) => theme.spacing.sm};
+  font-size: ${({ theme }) => theme.typography.h3.size};
+  font-weight: ${({ theme }) => theme.typography.h3.weight};
+  color: ${({ theme }) => theme.colors.textPrimary};
+`;
+
+const StrategyItem = styled.div`
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  border-radius: ${({ theme }) => theme.radius.sm};
+  padding: ${({ theme }) => theme.spacing.md};
+
+  & + & {
+    margin-top: ${({ theme }) => theme.spacing.sm};
+  }
+`;
+
+const StrategyItemHead = styled.div`
+  display: flex;
+  align-items: center;
+  gap: ${({ theme }) => theme.spacing.sm};
+  margin-bottom: ${({ theme }) => theme.spacing.xs};
+`;
+
+/** "약점" 칩 - 강조색(accent)은 다른 곳에 쓰므로, 여기선 무채색 칩으로 조용히 둔다. */
+const StrategyBadge = styled.span`
+  flex-shrink: 0;
+  padding: 2px ${({ theme }) => theme.spacing.sm};
+  border-radius: ${({ theme }) => theme.radius.pill};
+  background: ${({ theme }) => theme.colors.backgroundAlt};
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  color: ${({ theme }) => theme.colors.textSecondary};
+  font-size: ${({ theme }) => theme.typography.label.size};
+  font-weight: ${({ theme }) => theme.typography.weight.semibold};
+`;
+
+const StrategyItemLabel = styled.span`
+  font-size: ${({ theme }) => theme.typography.bodySmall.size};
+  font-weight: ${({ theme }) => theme.typography.weight.semibold};
+  color: ${({ theme }) => theme.colors.textPrimary};
+`;
+
+const StrategyItemHint = styled.p`
+  margin: 0;
+  font-size: ${({ theme }) => theme.typography.bodySmall.size};
+  color: ${({ theme }) => theme.colors.textSecondary};
+  line-height: ${({ theme }) => theme.typography.body.lineHeight};
+`;
+
+const StrategyEmpty = styled.div`
+  padding: ${({ theme }) => theme.spacing.md};
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  border-radius: ${({ theme }) => theme.radius.sm};
+  color: ${({ theme }) => theme.colors.textSecondary};
+  font-size: ${({ theme }) => theme.typography.bodySmall.size};
+  line-height: ${({ theme }) => theme.typography.body.lineHeight};
+`;
+
+const StrategyDisclaimer = styled.p`
+  margin: ${({ theme }) => theme.spacing.sm} 0 0;
+  font-size: ${({ theme }) => theme.typography.caption.size};
+  color: ${({ theme }) => theme.colors.textTertiary};
+  line-height: ${({ theme }) => theme.typography.caption.lineHeight};
+`;
+
 export function RegionIndustryDetailPanel() {
   const { industryCode, regionCode, setRegionCode } = useSelection();
   const { data: detail, isLoading, isError, error } = useScoreDetail(regionCode, industryCode);
@@ -322,6 +395,9 @@ export function RegionIndustryDetailPanel() {
     () => ranking?.find((item) => item.regionCode === regionCode) ?? null,
     [ranking, regionCode],
   );
+
+  // 낮은 지표 → 대응 전략 힌트(이슈 #37). detail이 아직 없으면 빈 배열(훅은 조건 없이 호출).
+  const strategyHints = useMemo(() => (detail ? extractStrategyHints(detail) : []), [detail]);
 
   const missingFields = useMemo(() => {
     if (!detail) return [];
@@ -627,6 +703,29 @@ export function RegionIndustryDetailPanel() {
       {!detail.ageDirection && (
         <NeutralAgeMetricNotice>이 업종은 연령 구성과 무관해 연령적합도 지표를 사용하지 않아요.</NeutralAgeMetricNotice>
       )}
+
+      <StrategySection>
+        <StrategyTitle>입지 약점 &amp; 대응 전략</StrategyTitle>
+        {strategyHints.length === 0 ? (
+          <StrategyEmpty>이 조합엔 뚜렷하게 약한 지표가 없어요(모든 지표가 기준 이상).</StrategyEmpty>
+        ) : (
+          strategyHints.map((h) => (
+            <StrategyItem key={h.key}>
+              <StrategyItemHead>
+                <StrategyBadge>약점</StrategyBadge>
+                <StrategyItemLabel>
+                  {h.label} {Math.round(h.score)}점
+                </StrategyItemLabel>
+              </StrategyItemHead>
+              <StrategyItemHint>{h.hint}</StrategyItemHint>
+            </StrategyItem>
+          ))
+        )}
+        <StrategyDisclaimer>
+          ※ 점수 데이터로 검증한 분석이 아니라, 낮은 지표에 대한 일반적 대응 방향을 규칙으로 제시하는
+          참고용 힌트예요.
+        </StrategyDisclaimer>
+      </StrategySection>
     </PanelRoot>
   );
 }
