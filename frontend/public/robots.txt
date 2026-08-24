@@ -1,4 +1,7 @@
 User-agent: *
 Allow: /
+# /api/*는 Cloudflare 프록시로 백엔드에 붙는 JSON API - 색인 대상이 아니고
+# 크롤 예산만 낭비하므로 차단한다.
+Disallow: /api/
 
 Sitemap: https://spotscore.pages.dev/sitemap.xml
