@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import styled, { useTheme } from 'styled-components';
 import { useRanking } from '../../api/scores';
 import { useStores } from '../../api/stores';
@@ -280,14 +280,21 @@ function buildScoreBadgeElement(
  * 가벼운 네이티브 Marker + MarkerClusterer 조합으로 바꿨다 - MarkerImage는
  * DOM 엘리먼트가 아니라 이미지 한 장이라 개수가 늘어도 비용이 훨씬 작다.
  */
-function buildStoreMarkerImage(theme: AppTheme): kakao.maps.MarkerImage {
+function buildStoreMarkerImage(theme: AppTheme, highlighted = false): kakao.maps.MarkerImage {
+  // 강조 시 더 크고 accent 색 원으로 바꿔, 상세 패널 가게 목록에서 hover한 항목이
+  // 지도의 어느 점인지 한눈에 보이게 한다(이슈 #34).
+  const size = highlighted ? 18 : 10;
+  const center = size / 2;
+  const radius = highlighted ? 7 : 4;
+  const fill = highlighted ? theme.colors.accent : theme.colors.textPrimary;
+  const strokeWidth = highlighted ? 2 : 1.5;
   const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10">` +
-    `<circle cx="5" cy="5" r="4" fill="${theme.colors.textPrimary}" stroke="${theme.colors.surface}" stroke-width="1.5"/>` +
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}">` +
+    `<circle cx="${center}" cy="${center}" r="${radius}" fill="${fill}" stroke="${theme.colors.surface}" stroke-width="${strokeWidth}"/>` +
     `</svg>`;
   const src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-  return new window.kakao.maps.MarkerImage(src, new window.kakao.maps.Size(10, 10), {
-    offset: new window.kakao.maps.Point(5, 5),
+  return new window.kakao.maps.MarkerImage(src, new window.kakao.maps.Size(size, size), {
+    offset: new window.kakao.maps.Point(center, center),
   });
 }
 
@@ -378,6 +385,13 @@ export function MapDashboard() {
   const clusterInfoWindowRef = useRef<kakao.maps.InfoWindow | null>(null);
   const pinnedStoreIdRef = useRef<string | null>(null);
   const boundsFittedForIndustryRef = useRef<string | null>(null);
+  // 상세 패널 가게 목록 hover ↔ 지도 마커 강조 연동용(이슈 #34). bizesId로 마커/이름을
+  // 찾아 명령형으로 restyle한다 - 매 hover마다 React 리렌더를 유발하지 않기 위해 ref로 둔다.
+  const storeMarkerByIdRef = useRef<Map<string, kakao.maps.Marker>>(new Map());
+  const storeNameByIdRef = useRef<Map<string, string>>(new Map());
+  const storeMarkerImageRef = useRef<kakao.maps.MarkerImage | null>(null);
+  const storeHighlightImageRef = useRef<kakao.maps.MarkerImage | null>(null);
+  const highlightedStoreIdRef = useRef<string | null>(null);
 
   // 지도 인스턴스 초기화 (SDK 준비된 이후 1회)
   useEffect(() => {
@@ -439,6 +453,9 @@ export function MapDashboard() {
 
     storeClustererRef.current?.clear();
     storeMarkersRef.current = [];
+    storeMarkerByIdRef.current.clear();
+    storeNameByIdRef.current.clear();
+    highlightedStoreIdRef.current = null;
     storeInfoWindowRef.current?.close();
     clusterInfoWindowRef.current?.close();
     pinnedStoreIdRef.current = null;
@@ -452,6 +469,8 @@ export function MapDashboard() {
     }
     const infoWindow = storeInfoWindowRef.current;
     const markerImage = buildStoreMarkerImage(theme);
+    storeMarkerImageRef.current = markerImage;
+    storeHighlightImageRef.current = buildStoreMarkerImage(theme, true);
 
     const markers: kakao.maps.Marker[] = [];
     (stores ?? []).forEach((store) => {
@@ -486,6 +505,8 @@ export function MapDashboard() {
         infoWindow.open(map, marker);
       });
 
+      storeMarkerByIdRef.current.set(store.bizesId, marker);
+      storeNameByIdRef.current.set(store.bizesId, store.bizesNm);
       markers.push(marker);
     });
 
@@ -527,6 +548,48 @@ export function MapDashboard() {
     storeClustererRef.current.addMarkers(markers);
     storeMarkersRef.current = markers;
   }, [stores, regionCode, industryCode, kakaoStatus, theme]);
+
+  // 상세 패널 가게 목록 항목 hover ↔ 지도 마커 강조 연동(이슈 #34). 마커를 명령형으로
+  // restyle하고 이름 InfoWindow를 좌표에 띄운다 - React state를 거치지 않아 리렌더가 없다.
+  const handleHoverStore = useCallback(
+    (bizesId: string | null) => {
+      const normal = storeMarkerImageRef.current;
+      const highlight = storeHighlightImageRef.current;
+      const markerMap = storeMarkerByIdRef.current;
+
+      const prev = highlightedStoreIdRef.current;
+      if (prev && prev !== bizesId) {
+        const prevMarker = markerMap.get(prev);
+        if (prevMarker && normal) {
+          prevMarker.setImage(normal);
+          prevMarker.setZIndex(0);
+        }
+      }
+      highlightedStoreIdRef.current = bizesId;
+
+      const map = mapRef.current;
+      const infoWindow = storeInfoWindowRef.current;
+      if (!bizesId) {
+        // hover 해제 - 클릭으로 고정(pin)한 InfoWindow는 유지한다.
+        if (pinnedStoreIdRef.current === null) {
+          infoWindow?.close();
+        }
+        return;
+      }
+
+      const marker = markerMap.get(bizesId);
+      if (marker && highlight) {
+        marker.setImage(highlight);
+        marker.setZIndex(10);
+      }
+      if (map && marker && infoWindow) {
+        infoWindow.setContent(buildStoreInfoContent(storeNameByIdRef.current.get(bizesId) ?? '', theme));
+        infoWindow.setPosition(marker.getPosition());
+        infoWindow.open(map);
+      }
+    },
+    [theme],
+  );
 
   // 업종을 고르면(=랭킹이 처음 도착하면) 기본 줌(전국)이 아니라 그 업종의 실제
   // 지역 분포에 맞춰 지도를 자동으로 프레이밍한다 - REGION에 폴리곤이 없어 경계를
@@ -649,7 +712,7 @@ export function MapDashboard() {
         )}
 
         <SlidePanel $open={Boolean(regionCode && industryCode)} aria-hidden={!regionCode}>
-          <RegionIndustryDetailPanel />
+          <RegionIndustryDetailPanel onHoverStore={handleHoverStore} />
         </SlidePanel>
 
         <ChatWidget industryCode={industryCode} regionCode={regionCode} />

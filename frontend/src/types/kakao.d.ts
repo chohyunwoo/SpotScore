@@ -68,6 +68,10 @@ declare global {
       setMap(map: Map | null): void;
       setPosition(latlng: LatLng): void;
       getPosition(): LatLng;
+      /** 목록 hover 시 강조 이미지로 교체하는 데 사용(이슈 #34). */
+      setImage(image: MarkerImage): void;
+      /** 강조된 마커를 다른 마커 위로 올리는 데 사용. */
+      setZIndex(zIndex: number): void;
     }
 
     interface InfoWindowOptions {
