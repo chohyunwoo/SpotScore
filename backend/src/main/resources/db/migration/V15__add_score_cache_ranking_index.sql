@@ -1,0 +1,24 @@
+-- ============================================================================
+-- 랭킹 조회(GET /api/v1/scores/ranking)용 인덱스.
+--
+-- ScoreCacheRepository.findRankingWithPercentile는 서비스에서 가장 자주 도는
+-- 쿼리로, 다음 형태다:
+--   WHERE industry_code = ? AND total_score IS NOT NULL
+--   ... PERCENT_RANK() OVER (PARTITION BY industry_code ORDER BY total_score DESC)
+--   ORDER BY total_score DESC
+--
+-- 기존 인덱스는 PK(id)와 UNIQUE(region_code, industry_code) 둘뿐인데, 후자는
+-- 선두 컬럼이 region_code라 "industry_code 단독 조건"에는 쓰이지 못한다. 그래서
+-- 이 쿼리는 매 요청마다 score_cache 전체를 Seq Scan하며 대부분의 행을 필터로
+-- 버려 왔다(실측: 26,637행 중 26,213행을 필터로 제거하고 424행만 사용).
+--
+-- (industry_code, total_score DESC) 복합 인덱스는 WHERE의 industry_code 등치,
+-- 윈도우 함수/ORDER BY의 total_score DESC 정렬을 한 인덱스로 커버한다. 실측
+-- EXPLAIN(ANALYZE) 기준 Seq Scan -> Bitmap Index Scan으로 바뀌며 score_cache
+-- 버퍼 접근이 632 -> 약 12로 줄었고, 데이터셋이 커질수록(전국 확장) 효과가 커진다.
+--
+-- 상세 조회(WHERE region_code = ? AND industry_code = ?)는 선두가 region_code인
+-- 기존 UNIQUE 인덱스로 이미 커버되므로 별도 인덱스를 추가하지 않는다.
+-- ============================================================================
+CREATE INDEX idx_score_cache_industry_total
+    ON score_cache (industry_code, total_score DESC);

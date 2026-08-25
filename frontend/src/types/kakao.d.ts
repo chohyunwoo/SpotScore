@@ -143,6 +143,8 @@ declare global {
     class CustomOverlay {
       constructor(options: CustomOverlayOptions);
       setMap(map: Map | null): void;
+      /** 오버레이 내용을 교체한다(선택 지역 배지 증분 하이라이트에 사용). */
+      setContent(content: HTMLElement | string): void;
     }
 
     function load(callback: () => void): void;

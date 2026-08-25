@@ -1,9 +1,15 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import styled from 'styled-components';
 import { AuthBar } from './components/Auth/AuthBar';
-import { AuthModal } from './components/Auth/AuthModal';
-import { CompareView } from './components/Compare/CompareView';
 import { MapDashboard } from './components/MapDashboard/MapDashboard';
+
+// 모달류는 처음 화면에 필요 없으므로 지연 로딩해 초기 번들에서 뺀다(named export라 default로 매핑).
+const AuthModal = lazy(() =>
+  import('./components/Auth/AuthModal').then((m) => ({ default: m.AuthModal })),
+);
+const CompareView = lazy(() =>
+  import('./components/Compare/CompareView').then((m) => ({ default: m.CompareView })),
+);
 
 const Page = styled.div`
   height: 100vh;
@@ -45,8 +51,14 @@ function App() {
         <MapDashboard />
       </DashboardArea>
 
-      {compareOpen && <CompareView onClose={() => setCompareOpen(false)} />}
-      <AuthModal />
+      {compareOpen && (
+        <Suspense fallback={null}>
+          <CompareView onClose={() => setCompareOpen(false)} />
+        </Suspense>
+      )}
+      <Suspense fallback={null}>
+        <AuthModal />
+      </Suspense>
     </Page>
   );
 }

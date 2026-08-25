@@ -3,6 +3,7 @@ package com.spotscore.scoring;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -39,11 +40,19 @@ final class PercentileRankNormalizer {
             return result;
         }
 
+        // PERCENT_RANK 정의상 각 값의 순위 = "자신보다 작은 값의 개수"인데, 이는
+        // 오름차순 정렬 배열에서 그 값이 처음 등장하는 인덱스와 같다(동점은 모두
+        // 같은 순위). 그래서 정렬 1회(O(n log n)) 후 "값 -> 첫 등장 인덱스"를 한 번
+        // 훑어 만들어 두면, 각 key는 조회(O(1))만 하면 된다. 이전엔 key마다 전체를
+        // 다시 스캔(filter)해 O(n^2)였다.
         List<Double> sortedValues = rawValues.values().stream().sorted().toList();
-        rawValues.forEach((key, value) -> {
-            long countLess = sortedValues.stream().filter(v -> v < value).count();
-            result.put(key, countLess / (double) (n - 1));
-        });
+        Map<Double, Long> countLessByValue = new HashMap<>();
+        for (int i = 0; i < sortedValues.size(); i++) {
+            countLessByValue.putIfAbsent(sortedValues.get(i), (long) i);
+        }
+
+        rawValues.forEach((key, value) ->
+                result.put(key, countLessByValue.get(value) / (double) (n - 1)));
         return result;
     }
 }
