@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import styled, { useTheme } from 'styled-components';
 import { useIndustries } from '../../api/industries';
 import { useRanking } from '../../api/scores';
@@ -7,11 +7,24 @@ import { useSelection } from '../../context/SelectionContext';
 import type { StoreItem } from '../../types/domain';
 import { IndustrySelector } from '../IndustrySelector/IndustrySelector';
 import { FavoriteStar } from '../FavoriteStar/FavoriteStar';
-import { RegionIndustryDetailPanel } from '../RegionIndustryDetailPanel/RegionIndustryDetailPanel';
 import { StoreListPanel } from '../StoreListPanel/StoreListPanel';
-import { StoreDetailModal } from '../StoreDetailModal/StoreDetailModal';
-import { ChatWidget } from '../ChatWidget/ChatWidget';
 import { RegionSearchBox } from '../RegionSearchBox/RegionSearchBox';
+
+// 무거운 라이브러리를 초기 번들에서 분리하기 위해 지연 로딩한다(named export → default 매핑).
+// - RegionIndustryDetailPanel: recharts(차트) 포함 → 지역을 처음 선택할 때만 로드
+// - ChatWidget: react-markdown+remark-gfm 포함 → 첫 화면 이후 비동기 로드
+// - StoreDetailModal: 가게를 클릭할 때만 로드
+const RegionIndustryDetailPanel = lazy(() =>
+  import('../RegionIndustryDetailPanel/RegionIndustryDetailPanel').then((m) => ({
+    default: m.RegionIndustryDetailPanel,
+  })),
+);
+const StoreDetailModal = lazy(() =>
+  import('../StoreDetailModal/StoreDetailModal').then((m) => ({ default: m.StoreDetailModal })),
+);
+const ChatWidget = lazy(() =>
+  import('../ChatWidget/ChatWidget').then((m) => ({ default: m.ChatWidget })),
+);
 import {
   ATTRACTIVENESS_TIER_ICON,
   ATTRACTIVENESS_TIER_LABEL,
@@ -396,6 +409,11 @@ export function MapDashboard() {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<kakao.maps.Map | null>(null);
   const overlaysRef = useRef<Map<string, kakao.maps.CustomOverlay>>(new Map());
+  // 배지 오버레이 증분 하이라이트용: 지역 선택이 바뀔 때 전체를 재생성하지 않고
+  // 이전/새 지역 배지 2개만 setContent로 다시 그리기 위해, 지역코드별 원자료와
+  // 현재 강조 중인 지역을 ref로 들고 있는다.
+  const badgeItemsRef = useRef<Map<string, RankingItem>>(new Map());
+  const highlightedRegionRef = useRef<string | null>(null);
   const storeMarkersRef = useRef<kakao.maps.Marker[]>([]);
   const storeClustererRef = useRef<kakao.maps.MarkerClusterer | null>(null);
   const storeInfoWindowRef = useRef<kakao.maps.InfoWindow | null>(null);
@@ -422,9 +440,11 @@ export function MapDashboard() {
     });
   }, [kakaoStatus]);
 
-  // 랭킹 데이터/선택 지역이 바뀔 때마다 점수 배지 오버레이를 다시 그리기.
-  // RankingItem.latitude/longitude는 좌표 시딩 전 지역은 null일 수 있으므로
-  // 그런 지역만 개별적으로 오버레이 생성을 건너뛴다(전체를 막지 않음).
+  // (1) 배지 오버레이 생성 - 랭킹 데이터/테마가 바뀔 때만 다시 그린다. 선택 지역
+  // 변경(regionCode)은 여기 의존성에서 뺐다: 예전엔 지역을 클릭할 때마다 수백 개
+  // 오버레이를 전부 파괴→재생성했는데, 그건 (2)의 증분 하이라이트로 대체한다.
+  // RankingItem.latitude/longitude는 좌표 시딩 전 지역은 null일 수 있어 그런 지역만
+  // 개별적으로 건너뛴다(전체를 막지 않음).
   useEffect(() => {
     const map = mapRef.current;
     if (kakaoStatus !== 'ready' || !map) {
@@ -433,6 +453,7 @@ export function MapDashboard() {
 
     overlaysRef.current.forEach((overlay) => overlay.setMap(null));
     overlaysRef.current.clear();
+    badgeItemsRef.current.clear();
 
     (ranking ?? []).forEach((item) => {
       const { latitude, longitude } = item;
@@ -454,8 +475,39 @@ export function MapDashboard() {
       });
 
       overlaysRef.current.set(item.regionCode, overlay);
+      badgeItemsRef.current.set(item.regionCode, item);
     });
-  }, [ranking, kakaoStatus, regionCode, setRegionCode, theme]);
+    highlightedRegionRef.current = regionCode;
+    // regionCode/setRegionCode는 의도적으로 의존성에서 제외(생성 시점 강조 상태만
+    // 반영하고, 이후 선택 변경은 (2) 증분 effect가 처리). eslint-disable-next-line
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ranking, kakaoStatus, theme]);
+
+  // (2) 선택 지역 변경 시 증분 하이라이트 - 전체 재생성 대신 이전/새 지역 배지
+  // 2개만 setContent로 다시 그린다(수백 개 → 최대 2개 갱신).
+  useEffect(() => {
+    if (kakaoStatus !== 'ready') {
+      return;
+    }
+    const prev = highlightedRegionRef.current;
+    if (prev === regionCode) {
+      return;
+    }
+
+    const restyle = (code: string | null, selected: boolean) => {
+      if (!code) return;
+      const overlay = overlaysRef.current.get(code);
+      const item = badgeItemsRef.current.get(code);
+      if (!overlay || !item) return;
+      overlay.setContent(
+        buildScoreBadgeElement(item, theme, selected, () => setRegionCode(code)),
+      );
+    };
+
+    restyle(prev, false);
+    restyle(regionCode, true);
+    highlightedRegionRef.current = regionCode;
+  }, [regionCode, kakaoStatus, setRegionCode, theme]);
 
   // 상세 패널이 열려있을 때만(regionCode 선택 시) 그 지역·업종의 개별 업소 점을
   // 추가로 그린다 - 패널을 닫으면(regionCode === null) stores 쿼리 자체가
@@ -742,18 +794,26 @@ export function MapDashboard() {
         )}
 
         <SlidePanel $open={Boolean(regionCode && industryCode)} aria-hidden={!regionCode}>
-          <RegionIndustryDetailPanel />
+          {regionCode && industryCode && (
+            <Suspense fallback={null}>
+              <RegionIndustryDetailPanel />
+            </Suspense>
+          )}
         </SlidePanel>
 
-        <ChatWidget industryCode={industryCode} regionCode={regionCode} />
+        <Suspense fallback={null}>
+          <ChatWidget industryCode={industryCode} regionCode={regionCode} />
+        </Suspense>
 
         {selectedStore && (
-          <StoreDetailModal
-            store={selectedStore}
-            regionName={selectedRegionName}
-            industryName={selectedIndustryName}
-            onClose={() => setSelectedStore(null)}
-          />
+          <Suspense fallback={null}>
+            <StoreDetailModal
+              store={selectedStore}
+              regionName={selectedRegionName}
+              industryName={selectedIndustryName}
+              onClose={() => setSelectedStore(null)}
+            />
+          </Suspense>
         )}
       </MapCanvasArea>
     </Layout>
