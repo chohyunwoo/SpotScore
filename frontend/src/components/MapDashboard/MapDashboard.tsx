@@ -54,6 +54,13 @@ const Layout = styled.div`
   @media (max-width: ${({ theme }) => theme.breakpoint.tablet}) {
     flex-direction: column;
   }
+
+  /* 폰: 고정 높이(height:100%)와 overflow:hidden이 내용을 잘라버리므로, 높이는
+     내용에 맡기고(자식에 명시 높이 부여) 페이지가 세로로 스크롤되게 한다. */
+  @media (max-width: ${({ theme }) => theme.breakpoint.mobile}) {
+    height: auto;
+    overflow: visible;
+  }
 `;
 
 /**
@@ -75,6 +82,11 @@ const Sidebar = styled.div`
     max-height: 40%;
     border-right: none;
     border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+  }
+
+  /* 폰: 40% 높이 캡을 풀고(페이지가 스크롤됨) 랭킹 리스트는 아래에서 자체 스크롤. */
+  @media (max-width: ${({ theme }) => theme.breakpoint.mobile}) {
+    max-height: none;
   }
 `;
 
@@ -108,6 +120,11 @@ const RankingCount = styled.span`
 const RankingScroll = styled.div`
   flex: 1;
   overflow-y: auto;
+
+  /* 폰: 리스트가 페이지를 끝없이 늘리지 않도록 자체 스크롤 높이를 둔다. */
+  @media (max-width: ${({ theme }) => theme.breakpoint.mobile}) {
+    max-height: 45vh;
+  }
 `;
 
 /**
@@ -195,6 +212,14 @@ const MapCanvasArea = styled.div`
   flex: 1;
   position: relative;
   min-height: 420px;
+
+  /* 폰: Layout이 height:auto라 flex:1로는 높이가 0이 된다. 지도가 보이도록 명시
+     높이를 주고, 이 영역만큼 페이지가 세로로 스크롤된다. */
+  @media (max-width: ${({ theme }) => theme.breakpoint.mobile}) {
+    flex: none;
+    height: 70vh;
+    min-height: 360px;
+  }
 `;
 
 const MapContainer = styled.div`
@@ -260,6 +285,17 @@ const SlidePanel = styled.div<{ $open: boolean }>`
   transform: translateX(${({ $open }) => ($open ? '0' : '100%')});
   transition: transform 0.25s ease;
   pointer-events: ${({ $open }) => ($open ? 'auto' : 'none')};
+
+  /* 폰: 지도 영역(70vh) 안에 절반만 덮이면 답답하므로 전체 화면 시트로 띄운다
+     (PanelRoot에 닫기 버튼이 있어 닫을 수 있음). */
+  @media (max-width: ${({ theme }) => theme.breakpoint.mobile}) {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100dvh;
+    border-left: none;
+    z-index: 1000;
+  }
 `;
 
 function buildScoreBadgeElement(
