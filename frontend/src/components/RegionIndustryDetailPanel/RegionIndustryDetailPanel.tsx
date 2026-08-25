@@ -13,7 +13,7 @@ import {
   getAttractivenessTierColor,
 } from '../../styles/attractivenessTier';
 import { getScoreScaleColor, INSUFFICIENT_SAMPLE_LABEL } from '../../styles/scoreScale';
-import { extractStrategyHints } from './locationStrategy';
+import { extractStrategyHints, extractStrengthHints } from './locationStrategy';
 
 const NA = 'N/A';
 
@@ -351,6 +351,13 @@ const StrategyBadge = styled.span`
   font-weight: ${({ theme }) => theme.typography.weight.semibold};
 `;
 
+/** "강점" 칩 - 약점(무채색)과 대비되도록 프로젝트 단일 강조색(accent) 톤으로 둔다. */
+const StrengthBadge = styled(StrategyBadge)`
+  background: ${({ theme }) => theme.colors.accentSurface};
+  border-color: ${({ theme }) => theme.colors.accent};
+  color: ${({ theme }) => theme.colors.accent};
+`;
+
 const StrategyItemLabel = styled.span`
   font-size: ${({ theme }) => theme.typography.bodySmall.size};
   font-weight: ${({ theme }) => theme.typography.weight.semibold};
@@ -398,6 +405,8 @@ export function RegionIndustryDetailPanel() {
 
   // 낮은 지표 → 대응 전략 힌트(이슈 #37). detail이 아직 없으면 빈 배열(훅은 조건 없이 호출).
   const strategyHints = useMemo(() => (detail ? extractStrategyHints(detail) : []), [detail]);
+  // 약점이 없을 때 "그럼 무엇을 살려 공략하나"를 안내하는 강점 힌트.
+  const strengthHints = useMemo(() => (detail ? extractStrengthHints(detail) : []), [detail]);
 
   const missingFields = useMemo(() => {
     if (!detail) return [];
@@ -707,7 +716,29 @@ export function RegionIndustryDetailPanel() {
       <StrategySection>
         <StrategyTitle>입지 약점 &amp; 대응 전략</StrategyTitle>
         {strategyHints.length === 0 ? (
-          <StrategyEmpty>이 조합엔 뚜렷하게 약한 지표가 없어요(모든 지표가 기준 이상).</StrategyEmpty>
+          // 약점이 없을 때: 강점이 있으면 그 강점을 살리는 공략을, 강점도 없으면(모든
+          // 지표가 평균 구간) 기본기 중심 조언을 안내한다.
+          strengthHints.length > 0 ? (
+            <>
+              <StrategyEmpty>뚜렷하게 약한 지표는 없어요. 아래 강점을 살려 공략해 보세요.</StrategyEmpty>
+              {strengthHints.map((h) => (
+                <StrategyItem key={h.key}>
+                  <StrategyItemHead>
+                    <StrengthBadge>강점</StrengthBadge>
+                    <StrategyItemLabel>
+                      {h.label} {Math.round(h.score)}점
+                    </StrategyItemLabel>
+                  </StrategyItemHead>
+                  <StrategyItemHint>{h.hint}</StrategyItemHint>
+                </StrategyItem>
+              ))}
+            </>
+          ) : (
+            <StrategyEmpty>
+              약점도 강점도 뚜렷하지 않은 평균적인 조합이에요. 입지 가시성과 운영·메뉴 차별화 같은 기본기로
+              승부하는 걸 검토해 보세요.
+            </StrategyEmpty>
+          )
         ) : (
           strategyHints.map((h) => (
             <StrategyItem key={h.key}>
@@ -722,7 +753,7 @@ export function RegionIndustryDetailPanel() {
           ))
         )}
         <StrategyDisclaimer>
-          ※ 점수 데이터로 검증한 분석이 아니라, 낮은 지표에 대한 일반적 대응 방향을 규칙으로 제시하는
+          ※ 점수 데이터로 검증한 분석이 아니라, 지표의 강·약점에 대한 일반적 대응 방향을 규칙으로 제시하는
           참고용 힌트예요.
         </StrategyDisclaimer>
       </StrategySection>
